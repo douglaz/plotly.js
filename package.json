@@ -1,16 +1,16 @@
 {
-  "name": "plotly.js",
+  "name": "plotly.js-with-locales",
   "version": "1.31.2",
-  "description": "The open source javascript graphing library that powers plotly",
+  "description": "Plotly.js with french translations",
   "license": "MIT",
   "main": "./lib/index.js",
   "webpack": "./dist/plotly.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/plotly/plotly.js.git"
+    "url": "https://github.com/florianleger/plotly.js.git"
   },
   "bugs": {
-    "url": "https://github.com/plotly/plotly.js/issues"
+    "url": "https://github.com/florianleger/plotly.js/issues"
   },
   "author": "Plotly, Inc.",
   "keywords": [
@@ -18,7 +18,8 @@
     "plotting",
     "data",
     "visualization",
-    "plotly"
+    "plotly",
+    "french"
   ],
   "scripts": {
     "preprocess": "node tasks/preprocess.js",
