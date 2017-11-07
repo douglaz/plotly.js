@@ -159,7 +159,7 @@ function heatmappishCalc(gd, trace) {
 
     function noZsmooth(msg) {
         zsmooth = trace._input.zsmooth = trace.zsmooth = false;
-        Lib.notifier('cannot fast-zsmooth: ' + msg);
+        Lib.notifier(require('../../core').uiTexts.noZZoomTip + msg);
     }
 
     // check whether we really can smooth (ie all boxes are about the same size)
