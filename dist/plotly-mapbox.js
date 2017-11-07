@@ -69,7 +69,7 @@ for(var selector in rules) {
     Lib.addStyleRule(fullSelector, rules[selector]);
 }
 
-},{"../src/lib":350}],2:[function(require,module,exports){
+},{"../src/lib":342}],2:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -208,7 +208,7 @@ module.exports = {
 
 module.exports = require('../src/core');
 
-},{"../src/core":336}],4:[function(require,module,exports){
+},{"../src/core":328}],4:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -240,7 +240,7 @@ module.exports = Plotly;
 
 module.exports = require('../src/traces/scattermapbox');
 
-},{"../src/traces/scattermapbox":476}],6:[function(require,module,exports){
+},{"../src/traces/scattermapbox":469}],6:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -734,7 +734,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"util/":206}],7:[function(require,module,exports){
+},{"util/":197}],7:[function(require,module,exports){
 // (c) Dean McNamee <dean@gmail.com>, 2012.
 //
 // https://github.com/deanm/css-color-parser-js
@@ -10496,6 +10496,7 @@ try { exports.parseCSSColor = parseCSSColor } catch(e) { }
 'use strict';
 
 module.exports = earcut;
+module.exports.default = earcut;
 
 function earcut(data, holeIndices, dim) {
 
@@ -10508,7 +10509,7 @@ function earcut(data, holeIndices, dim) {
 
     if (!outerNode) return triangles;
 
-    var minX, minY, maxX, maxY, x, y, size;
+    var minX, minY, maxX, maxY, x, y, invSize;
 
     if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
 
@@ -10526,11 +10527,12 @@ function earcut(data, holeIndices, dim) {
             if (y > maxY) maxY = y;
         }
 
-        // minX, minY and size are later used to transform coords into integers for z-order calculation
-        size = Math.max(maxX - minX, maxY - minY);
+        // minX, minY and invSize are later used to transform coords into integers for z-order calculation
+        invSize = Math.max(maxX - minX, maxY - minY);
+        invSize = invSize !== 0 ? 1 / invSize : 0;
     }
 
-    earcutLinked(outerNode, triangles, dim, minX, minY, size);
+    earcutLinked(outerNode, triangles, dim, minX, minY, invSize);
 
     return triangles;
 }
@@ -10566,7 +10568,7 @@ function filterPoints(start, end) {
         if (!p.steiner && (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
             removeNode(p);
             p = end = p.prev;
-            if (p === p.next) return null;
+            if (p === p.next) break;
             again = true;
 
         } else {
@@ -10578,11 +10580,11 @@ function filterPoints(start, end) {
 }
 
 // main ear slicing loop which triangulates a polygon (given as a linked list)
-function earcutLinked(ear, triangles, dim, minX, minY, size, pass) {
+function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
     if (!ear) return;
 
     // interlink polygon nodes in z-order
-    if (!pass && size) indexCurve(ear, minX, minY, size);
+    if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
 
     var stop = ear,
         prev, next;
@@ -10592,7 +10594,7 @@ function earcutLinked(ear, triangles, dim, minX, minY, size, pass) {
         prev = ear.prev;
         next = ear.next;
 
-        if (size ? isEarHashed(ear, minX, minY, size) : isEar(ear)) {
+        if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
             // cut off the triangle
             triangles.push(prev.i / dim);
             triangles.push(ear.i / dim);
@@ -10613,16 +10615,16 @@ function earcutLinked(ear, triangles, dim, minX, minY, size, pass) {
         if (ear === stop) {
             // try filtering points and slicing again
             if (!pass) {
-                earcutLinked(filterPoints(ear), triangles, dim, minX, minY, size, 1);
+                earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
 
             // if this didn't work, try curing all small self-intersections locally
             } else if (pass === 1) {
                 ear = cureLocalIntersections(ear, triangles, dim);
-                earcutLinked(ear, triangles, dim, minX, minY, size, 2);
+                earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
 
             // as a last resort, try splitting the remaining polygon into two
             } else if (pass === 2) {
-                splitEarcut(ear, triangles, dim, minX, minY, size);
+                splitEarcut(ear, triangles, dim, minX, minY, invSize);
             }
 
             break;
@@ -10650,7 +10652,7 @@ function isEar(ear) {
     return true;
 }
 
-function isEarHashed(ear, minX, minY, size) {
+function isEarHashed(ear, minX, minY, invSize) {
     var a = ear.prev,
         b = ear,
         c = ear.next;
@@ -10664,8 +10666,8 @@ function isEarHashed(ear, minX, minY, size) {
         maxTY = a.y > b.y ? (a.y > c.y ? a.y : c.y) : (b.y > c.y ? b.y : c.y);
 
     // z-order range for the current triangle bbox;
-    var minZ = zOrder(minTX, minTY, minX, minY, size),
-        maxZ = zOrder(maxTX, maxTY, minX, minY, size);
+    var minZ = zOrder(minTX, minTY, minX, minY, invSize),
+        maxZ = zOrder(maxTX, maxTY, minX, minY, invSize);
 
     // first look for points inside the triangle in increasing z-order
     var p = ear.nextZ;
@@ -10716,7 +10718,7 @@ function cureLocalIntersections(start, triangles, dim) {
 }
 
 // try splitting polygon into two and triangulate them independently
-function splitEarcut(start, triangles, dim, minX, minY, size) {
+function splitEarcut(start, triangles, dim, minX, minY, invSize) {
     // look for a valid diagonal that divides the polygon into two
     var a = start;
     do {
@@ -10731,8 +10733,8 @@ function splitEarcut(start, triangles, dim, minX, minY, size) {
                 c = filterPoints(c, c.next);
 
                 // run earcut on each half
-                earcutLinked(a, triangles, dim, minX, minY, size);
-                earcutLinked(c, triangles, dim, minX, minY, size);
+                earcutLinked(a, triangles, dim, minX, minY, invSize);
+                earcutLinked(c, triangles, dim, minX, minY, invSize);
                 return;
             }
             b = b.next;
@@ -10789,7 +10791,7 @@ function findHoleBridge(hole, outerNode) {
     // find a segment intersected by a ray from the hole's leftmost point to the left;
     // segment's endpoint with lesser x will be potential connection point
     do {
-        if (hy <= p.y && hy >= p.next.y) {
+        if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
             var x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
             if (x <= hx && x > qx) {
                 qx = x;
@@ -10820,7 +10822,7 @@ function findHoleBridge(hole, outerNode) {
     p = m.next;
 
     while (p !== stop) {
-        if (hx >= p.x && p.x >= mx &&
+        if (hx >= p.x && p.x >= mx && hx !== p.x &&
                 pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
 
             tan = Math.abs(hy - p.y) / (hx - p.x); // tangential
@@ -10838,10 +10840,10 @@ function findHoleBridge(hole, outerNode) {
 }
 
 // interlink polygon nodes in z-order
-function indexCurve(start, minX, minY, size) {
+function indexCurve(start, minX, minY, invSize) {
     var p = start;
     do {
-        if (p.z === null) p.z = zOrder(p.x, p.y, minX, minY, size);
+        if (p.z === null) p.z = zOrder(p.x, p.y, minX, minY, invSize);
         p.prevZ = p.prev;
         p.nextZ = p.next;
         p = p.next;
@@ -10874,20 +10876,11 @@ function sortLinked(list) {
                 q = q.nextZ;
                 if (!q) break;
             }
-
             qSize = inSize;
 
             while (pSize > 0 || (qSize > 0 && q)) {
 
-                if (pSize === 0) {
-                    e = q;
-                    q = q.nextZ;
-                    qSize--;
-                } else if (qSize === 0 || !q) {
-                    e = p;
-                    p = p.nextZ;
-                    pSize--;
-                } else if (p.z <= q.z) {
+                if (pSize !== 0 && (qSize === 0 || !q || p.z <= q.z)) {
                     e = p;
                     p = p.nextZ;
                     pSize--;
@@ -10915,11 +10908,11 @@ function sortLinked(list) {
     return list;
 }
 
-// z-order of a point given coords and size of the data bounding box
-function zOrder(x, y, minX, minY, size) {
+// z-order of a point given coords and inverse of the longer side of data bbox
+function zOrder(x, y, minX, minY, invSize) {
     // coords are transformed into non-negative 15-bit integer range
-    x = 32767 * (x - minX) / size;
-    y = 32767 * (y - minY) / size;
+    x = 32767 * (x - minX) * invSize;
+    y = 32767 * (y - minY) * invSize;
 
     x = (x | (x << 8)) & 0x00FF00FF;
     x = (x | (x << 4)) & 0x0F0F0F0F;
@@ -11003,7 +10996,8 @@ function middleInside(a, b) {
         px = (a.x + b.x) / 2,
         py = (a.y + b.y) / 2;
     do {
-        if (((p.y > py) !== (p.next.y > py)) && (px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x))
+        if (((p.y > py) !== (p.next.y > py)) && p.next.y !== p.y &&
+                (px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x))
             inside = !inside;
         p = p.next;
     } while (p !== a);
@@ -12295,7 +12289,7 @@ return Promise;
 })));
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":191}],11:[function(require,module,exports){
+},{"_process":182}],11:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -12806,7 +12800,7 @@ function rad(_) {
     return _ * Math.PI / 180;
 }
 
-},{"wgs84":215}],15:[function(require,module,exports){
+},{"wgs84":206}],15:[function(require,module,exports){
 var geojsonArea = require('geojson-area');
 
 module.exports = rewind;
@@ -13758,8 +13752,2635 @@ function fromQuat(out, q) {
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
  * @author Colin MacKenzie IV
- * @version 2.3.2
+ * @version 2.4.0
  */
+
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+(function webpackUniversalModuleDefinition(root, factory) {
+	if(typeof exports === 'object' && typeof module === 'object')
+		module.exports = factory();
+	else if(typeof define === 'function' && define.amd)
+		define([], factory);
+	else {
+		var a = factory();
+		for(var i in a) (typeof exports === 'object' ? exports : root)[i] = a[i];
+	}
+})(this, function() {
+return /******/ (function(modules) { // webpackBootstrap
+/******/ 	// The module cache
+/******/ 	var installedModules = {};
+/******/
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/
+/******/ 		// Check if module is in cache
+/******/ 		if(installedModules[moduleId]) {
+/******/ 			return installedModules[moduleId].exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = installedModules[moduleId] = {
+/******/ 			i: moduleId,
+/******/ 			l: false,
+/******/ 			exports: {}
+/******/ 		};
+/******/
+/******/ 		// Execute the module function
+/******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+/******/
+/******/ 		// Flag the module as loaded
+/******/ 		module.l = true;
+/******/
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/
+/******/
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__webpack_require__.m = modules;
+/******/
+/******/ 	// expose the module cache
+/******/ 	__webpack_require__.c = installedModules;
+/******/
+/******/ 	// define getter function for harmony exports
+/******/ 	__webpack_require__.d = function(exports, name, getter) {
+/******/ 		if(!__webpack_require__.o(exports, name)) {
+/******/ 			Object.defineProperty(exports, name, {
+/******/ 				configurable: false,
+/******/ 				enumerable: true,
+/******/ 				get: getter
+/******/ 			});
+/******/ 		}
+/******/ 	};
+/******/
+/******/ 	// getDefaultExport function for compatibility with non-harmony modules
+/******/ 	__webpack_require__.n = function(module) {
+/******/ 		var getter = module && module.__esModule ?
+/******/ 			function getDefault() { return module['default']; } :
+/******/ 			function getModuleExports() { return module; };
+/******/ 		__webpack_require__.d(getter, 'a', getter);
+/******/ 		return getter;
+/******/ 	};
+/******/
+/******/ 	// Object.prototype.hasOwnProperty.call
+/******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
+/******/
+/******/ 	// __webpack_public_path__
+/******/ 	__webpack_require__.p = "";
+/******/
+/******/ 	// Load entry module and return exports
+/******/ 	return __webpack_require__(__webpack_require__.s = 4);
+/******/ })
+/************************************************************************/
+/******/ ([
+/* 0 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setMatrixArrayType = setMatrixArrayType;
+exports.toRadian = toRadian;
+exports.equals = equals;
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+/**
+ * Common utilities
+ * @module glMatrix
+ */
+
+// Configuration Constants
+var EPSILON = exports.EPSILON = 0.000001;
+var ARRAY_TYPE = exports.ARRAY_TYPE = typeof Float32Array !== 'undefined' ? Float32Array : Array;
+var RANDOM = exports.RANDOM = Math.random;
+
+/**
+ * Sets the type of array used when creating new vectors and matrices
+ *
+ * @param {Type} type Array type, such as Float32Array or Array
+ */
+function setMatrixArrayType(type) {
+  exports.ARRAY_TYPE = ARRAY_TYPE = type;
+}
+
+var degree = Math.PI / 180;
+
+/**
+ * Convert Degree To Radian
+ *
+ * @param {Number} a Angle in Degrees
+ */
+function toRadian(a) {
+  return a * degree;
+}
+
+/**
+ * Tests whether or not the arguments have approximately the same value, within an absolute
+ * or relative tolerance of glMatrix.EPSILON (an absolute tolerance is used for values less
+ * than or equal to 1.0, and a relative tolerance is used for larger values)
+ *
+ * @param {Number} a The first number to test.
+ * @param {Number} b The second number to test.
+ * @returns {Boolean} True if the numbers are approximately equal, false otherwise.
+ */
+function equals(a, b) {
+  return Math.abs(a - b) <= EPSILON * Math.max(1.0, Math.abs(a), Math.abs(b));
+}
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.sub = exports.mul = undefined;
+exports.create = create;
+exports.fromMat4 = fromMat4;
+exports.clone = clone;
+exports.copy = copy;
+exports.fromValues = fromValues;
+exports.set = set;
+exports.identity = identity;
+exports.transpose = transpose;
+exports.invert = invert;
+exports.adjoint = adjoint;
+exports.determinant = determinant;
+exports.multiply = multiply;
+exports.translate = translate;
+exports.rotate = rotate;
+exports.scale = scale;
+exports.fromTranslation = fromTranslation;
+exports.fromRotation = fromRotation;
+exports.fromScaling = fromScaling;
+exports.fromMat2d = fromMat2d;
+exports.fromQuat = fromQuat;
+exports.normalFromMat4 = normalFromMat4;
+exports.projection = projection;
+exports.str = str;
+exports.frob = frob;
+exports.add = add;
+exports.subtract = subtract;
+exports.multiplyScalar = multiplyScalar;
+exports.multiplyScalarAndAdd = multiplyScalarAndAdd;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/**
+ * 3x3 Matrix
+ * @module mat3
+ */
+
+/**
+ * Creates a new identity mat3
+ *
+ * @returns {mat3} a new 3x3 matrix
+ */
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(9);
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 1;
+  out[5] = 0;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 1;
+  return out;
+}
+
+/**
+ * Copies the upper-left 3x3 values into the given mat3.
+ *
+ * @param {mat3} out the receiving 3x3 matrix
+ * @param {mat4} a   the source 4x4 matrix
+ * @returns {mat3} out
+ */
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+function fromMat4(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[4];
+  out[4] = a[5];
+  out[5] = a[6];
+  out[6] = a[8];
+  out[7] = a[9];
+  out[8] = a[10];
+  return out;
+}
+
+/**
+ * Creates a new mat3 initialized with values from an existing matrix
+ *
+ * @param {mat3} a matrix to clone
+ * @returns {mat3} a new 3x3 matrix
+ */
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(9);
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  out[4] = a[4];
+  out[5] = a[5];
+  out[6] = a[6];
+  out[7] = a[7];
+  out[8] = a[8];
+  return out;
+}
+
+/**
+ * Copy the values from one mat3 to another
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the source matrix
+ * @returns {mat3} out
+ */
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  out[4] = a[4];
+  out[5] = a[5];
+  out[6] = a[6];
+  out[7] = a[7];
+  out[8] = a[8];
+  return out;
+}
+
+/**
+ * Create a new mat3 with the given values
+ *
+ * @param {Number} m00 Component in column 0, row 0 position (index 0)
+ * @param {Number} m01 Component in column 0, row 1 position (index 1)
+ * @param {Number} m02 Component in column 0, row 2 position (index 2)
+ * @param {Number} m10 Component in column 1, row 0 position (index 3)
+ * @param {Number} m11 Component in column 1, row 1 position (index 4)
+ * @param {Number} m12 Component in column 1, row 2 position (index 5)
+ * @param {Number} m20 Component in column 2, row 0 position (index 6)
+ * @param {Number} m21 Component in column 2, row 1 position (index 7)
+ * @param {Number} m22 Component in column 2, row 2 position (index 8)
+ * @returns {mat3} A new mat3
+ */
+function fromValues(m00, m01, m02, m10, m11, m12, m20, m21, m22) {
+  var out = new glMatrix.ARRAY_TYPE(9);
+  out[0] = m00;
+  out[1] = m01;
+  out[2] = m02;
+  out[3] = m10;
+  out[4] = m11;
+  out[5] = m12;
+  out[6] = m20;
+  out[7] = m21;
+  out[8] = m22;
+  return out;
+}
+
+/**
+ * Set the components of a mat3 to the given values
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {Number} m00 Component in column 0, row 0 position (index 0)
+ * @param {Number} m01 Component in column 0, row 1 position (index 1)
+ * @param {Number} m02 Component in column 0, row 2 position (index 2)
+ * @param {Number} m10 Component in column 1, row 0 position (index 3)
+ * @param {Number} m11 Component in column 1, row 1 position (index 4)
+ * @param {Number} m12 Component in column 1, row 2 position (index 5)
+ * @param {Number} m20 Component in column 2, row 0 position (index 6)
+ * @param {Number} m21 Component in column 2, row 1 position (index 7)
+ * @param {Number} m22 Component in column 2, row 2 position (index 8)
+ * @returns {mat3} out
+ */
+function set(out, m00, m01, m02, m10, m11, m12, m20, m21, m22) {
+  out[0] = m00;
+  out[1] = m01;
+  out[2] = m02;
+  out[3] = m10;
+  out[4] = m11;
+  out[5] = m12;
+  out[6] = m20;
+  out[7] = m21;
+  out[8] = m22;
+  return out;
+}
+
+/**
+ * Set a mat3 to the identity matrix
+ *
+ * @param {mat3} out the receiving matrix
+ * @returns {mat3} out
+ */
+function identity(out) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 1;
+  out[5] = 0;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 1;
+  return out;
+}
+
+/**
+ * Transpose the values of a mat3
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the source matrix
+ * @returns {mat3} out
+ */
+function transpose(out, a) {
+  // If we are transposing ourselves we can skip a few steps but have to cache some values
+  if (out === a) {
+    var a01 = a[1],
+        a02 = a[2],
+        a12 = a[5];
+    out[1] = a[3];
+    out[2] = a[6];
+    out[3] = a01;
+    out[5] = a[7];
+    out[6] = a02;
+    out[7] = a12;
+  } else {
+    out[0] = a[0];
+    out[1] = a[3];
+    out[2] = a[6];
+    out[3] = a[1];
+    out[4] = a[4];
+    out[5] = a[7];
+    out[6] = a[2];
+    out[7] = a[5];
+    out[8] = a[8];
+  }
+
+  return out;
+}
+
+/**
+ * Inverts a mat3
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the source matrix
+ * @returns {mat3} out
+ */
+function invert(out, a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2];
+  var a10 = a[3],
+      a11 = a[4],
+      a12 = a[5];
+  var a20 = a[6],
+      a21 = a[7],
+      a22 = a[8];
+
+  var b01 = a22 * a11 - a12 * a21;
+  var b11 = -a22 * a10 + a12 * a20;
+  var b21 = a21 * a10 - a11 * a20;
+
+  // Calculate the determinant
+  var det = a00 * b01 + a01 * b11 + a02 * b21;
+
+  if (!det) {
+    return null;
+  }
+  det = 1.0 / det;
+
+  out[0] = b01 * det;
+  out[1] = (-a22 * a01 + a02 * a21) * det;
+  out[2] = (a12 * a01 - a02 * a11) * det;
+  out[3] = b11 * det;
+  out[4] = (a22 * a00 - a02 * a20) * det;
+  out[5] = (-a12 * a00 + a02 * a10) * det;
+  out[6] = b21 * det;
+  out[7] = (-a21 * a00 + a01 * a20) * det;
+  out[8] = (a11 * a00 - a01 * a10) * det;
+  return out;
+}
+
+/**
+ * Calculates the adjugate of a mat3
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the source matrix
+ * @returns {mat3} out
+ */
+function adjoint(out, a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2];
+  var a10 = a[3],
+      a11 = a[4],
+      a12 = a[5];
+  var a20 = a[6],
+      a21 = a[7],
+      a22 = a[8];
+
+  out[0] = a11 * a22 - a12 * a21;
+  out[1] = a02 * a21 - a01 * a22;
+  out[2] = a01 * a12 - a02 * a11;
+  out[3] = a12 * a20 - a10 * a22;
+  out[4] = a00 * a22 - a02 * a20;
+  out[5] = a02 * a10 - a00 * a12;
+  out[6] = a10 * a21 - a11 * a20;
+  out[7] = a01 * a20 - a00 * a21;
+  out[8] = a00 * a11 - a01 * a10;
+  return out;
+}
+
+/**
+ * Calculates the determinant of a mat3
+ *
+ * @param {mat3} a the source matrix
+ * @returns {Number} determinant of a
+ */
+function determinant(a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2];
+  var a10 = a[3],
+      a11 = a[4],
+      a12 = a[5];
+  var a20 = a[6],
+      a21 = a[7],
+      a22 = a[8];
+
+  return a00 * (a22 * a11 - a12 * a21) + a01 * (-a22 * a10 + a12 * a20) + a02 * (a21 * a10 - a11 * a20);
+}
+
+/**
+ * Multiplies two mat3's
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the first operand
+ * @param {mat3} b the second operand
+ * @returns {mat3} out
+ */
+function multiply(out, a, b) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2];
+  var a10 = a[3],
+      a11 = a[4],
+      a12 = a[5];
+  var a20 = a[6],
+      a21 = a[7],
+      a22 = a[8];
+
+  var b00 = b[0],
+      b01 = b[1],
+      b02 = b[2];
+  var b10 = b[3],
+      b11 = b[4],
+      b12 = b[5];
+  var b20 = b[6],
+      b21 = b[7],
+      b22 = b[8];
+
+  out[0] = b00 * a00 + b01 * a10 + b02 * a20;
+  out[1] = b00 * a01 + b01 * a11 + b02 * a21;
+  out[2] = b00 * a02 + b01 * a12 + b02 * a22;
+
+  out[3] = b10 * a00 + b11 * a10 + b12 * a20;
+  out[4] = b10 * a01 + b11 * a11 + b12 * a21;
+  out[5] = b10 * a02 + b11 * a12 + b12 * a22;
+
+  out[6] = b20 * a00 + b21 * a10 + b22 * a20;
+  out[7] = b20 * a01 + b21 * a11 + b22 * a21;
+  out[8] = b20 * a02 + b21 * a12 + b22 * a22;
+  return out;
+}
+
+/**
+ * Translate a mat3 by the given vector
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the matrix to translate
+ * @param {vec2} v vector to translate by
+ * @returns {mat3} out
+ */
+function translate(out, a, v) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a10 = a[3],
+      a11 = a[4],
+      a12 = a[5],
+      a20 = a[6],
+      a21 = a[7],
+      a22 = a[8],
+      x = v[0],
+      y = v[1];
+
+  out[0] = a00;
+  out[1] = a01;
+  out[2] = a02;
+
+  out[3] = a10;
+  out[4] = a11;
+  out[5] = a12;
+
+  out[6] = x * a00 + y * a10 + a20;
+  out[7] = x * a01 + y * a11 + a21;
+  out[8] = x * a02 + y * a12 + a22;
+  return out;
+}
+
+/**
+ * Rotates a mat3 by the given angle
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the matrix to rotate
+ * @param {Number} rad the angle to rotate the matrix by
+ * @returns {mat3} out
+ */
+function rotate(out, a, rad) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a10 = a[3],
+      a11 = a[4],
+      a12 = a[5],
+      a20 = a[6],
+      a21 = a[7],
+      a22 = a[8],
+      s = Math.sin(rad),
+      c = Math.cos(rad);
+
+  out[0] = c * a00 + s * a10;
+  out[1] = c * a01 + s * a11;
+  out[2] = c * a02 + s * a12;
+
+  out[3] = c * a10 - s * a00;
+  out[4] = c * a11 - s * a01;
+  out[5] = c * a12 - s * a02;
+
+  out[6] = a20;
+  out[7] = a21;
+  out[8] = a22;
+  return out;
+};
+
+/**
+ * Scales the mat3 by the dimensions in the given vec2
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the matrix to rotate
+ * @param {vec2} v the vec2 to scale the matrix by
+ * @returns {mat3} out
+ **/
+function scale(out, a, v) {
+  var x = v[0],
+      y = v[1];
+
+  out[0] = x * a[0];
+  out[1] = x * a[1];
+  out[2] = x * a[2];
+
+  out[3] = y * a[3];
+  out[4] = y * a[4];
+  out[5] = y * a[5];
+
+  out[6] = a[6];
+  out[7] = a[7];
+  out[8] = a[8];
+  return out;
+}
+
+/**
+ * Creates a matrix from a vector translation
+ * This is equivalent to (but much faster than):
+ *
+ *     mat3.identity(dest);
+ *     mat3.translate(dest, dest, vec);
+ *
+ * @param {mat3} out mat3 receiving operation result
+ * @param {vec2} v Translation vector
+ * @returns {mat3} out
+ */
+function fromTranslation(out, v) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 1;
+  out[5] = 0;
+  out[6] = v[0];
+  out[7] = v[1];
+  out[8] = 1;
+  return out;
+}
+
+/**
+ * Creates a matrix from a given angle
+ * This is equivalent to (but much faster than):
+ *
+ *     mat3.identity(dest);
+ *     mat3.rotate(dest, dest, rad);
+ *
+ * @param {mat3} out mat3 receiving operation result
+ * @param {Number} rad the angle to rotate the matrix by
+ * @returns {mat3} out
+ */
+function fromRotation(out, rad) {
+  var s = Math.sin(rad),
+      c = Math.cos(rad);
+
+  out[0] = c;
+  out[1] = s;
+  out[2] = 0;
+
+  out[3] = -s;
+  out[4] = c;
+  out[5] = 0;
+
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 1;
+  return out;
+}
+
+/**
+ * Creates a matrix from a vector scaling
+ * This is equivalent to (but much faster than):
+ *
+ *     mat3.identity(dest);
+ *     mat3.scale(dest, dest, vec);
+ *
+ * @param {mat3} out mat3 receiving operation result
+ * @param {vec2} v Scaling vector
+ * @returns {mat3} out
+ */
+function fromScaling(out, v) {
+  out[0] = v[0];
+  out[1] = 0;
+  out[2] = 0;
+
+  out[3] = 0;
+  out[4] = v[1];
+  out[5] = 0;
+
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 1;
+  return out;
+}
+
+/**
+ * Copies the values from a mat2d into a mat3
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat2d} a the matrix to copy
+ * @returns {mat3} out
+ **/
+function fromMat2d(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = 0;
+
+  out[3] = a[2];
+  out[4] = a[3];
+  out[5] = 0;
+
+  out[6] = a[4];
+  out[7] = a[5];
+  out[8] = 1;
+  return out;
+}
+
+/**
+* Calculates a 3x3 matrix from the given quaternion
+*
+* @param {mat3} out mat3 receiving operation result
+* @param {quat} q Quaternion to create matrix from
+*
+* @returns {mat3} out
+*/
+function fromQuat(out, q) {
+  var x = q[0],
+      y = q[1],
+      z = q[2],
+      w = q[3];
+  var x2 = x + x;
+  var y2 = y + y;
+  var z2 = z + z;
+
+  var xx = x * x2;
+  var yx = y * x2;
+  var yy = y * y2;
+  var zx = z * x2;
+  var zy = z * y2;
+  var zz = z * z2;
+  var wx = w * x2;
+  var wy = w * y2;
+  var wz = w * z2;
+
+  out[0] = 1 - yy - zz;
+  out[3] = yx - wz;
+  out[6] = zx + wy;
+
+  out[1] = yx + wz;
+  out[4] = 1 - xx - zz;
+  out[7] = zy - wx;
+
+  out[2] = zx - wy;
+  out[5] = zy + wx;
+  out[8] = 1 - xx - yy;
+
+  return out;
+}
+
+/**
+* Calculates a 3x3 normal matrix (transpose inverse) from the 4x4 matrix
+*
+* @param {mat3} out mat3 receiving operation result
+* @param {mat4} a Mat4 to derive the normal matrix from
+*
+* @returns {mat3} out
+*/
+function normalFromMat4(out, a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a03 = a[3];
+  var a10 = a[4],
+      a11 = a[5],
+      a12 = a[6],
+      a13 = a[7];
+  var a20 = a[8],
+      a21 = a[9],
+      a22 = a[10],
+      a23 = a[11];
+  var a30 = a[12],
+      a31 = a[13],
+      a32 = a[14],
+      a33 = a[15];
+
+  var b00 = a00 * a11 - a01 * a10;
+  var b01 = a00 * a12 - a02 * a10;
+  var b02 = a00 * a13 - a03 * a10;
+  var b03 = a01 * a12 - a02 * a11;
+  var b04 = a01 * a13 - a03 * a11;
+  var b05 = a02 * a13 - a03 * a12;
+  var b06 = a20 * a31 - a21 * a30;
+  var b07 = a20 * a32 - a22 * a30;
+  var b08 = a20 * a33 - a23 * a30;
+  var b09 = a21 * a32 - a22 * a31;
+  var b10 = a21 * a33 - a23 * a31;
+  var b11 = a22 * a33 - a23 * a32;
+
+  // Calculate the determinant
+  var det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+
+  if (!det) {
+    return null;
+  }
+  det = 1.0 / det;
+
+  out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
+  out[1] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
+  out[2] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
+
+  out[3] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+  out[4] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+  out[5] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+
+  out[6] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
+  out[7] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
+  out[8] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
+
+  return out;
+}
+
+/**
+ * Generates a 2D projection matrix with the given bounds
+ *
+ * @param {mat3} out mat3 frustum matrix will be written into
+ * @param {number} width Width of your gl context
+ * @param {number} height Height of gl context
+ * @returns {mat3} out
+ */
+function projection(out, width, height) {
+  out[0] = 2 / width;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = -2 / height;
+  out[5] = 0;
+  out[6] = -1;
+  out[7] = 1;
+  out[8] = 1;
+  return out;
+}
+
+/**
+ * Returns a string representation of a mat3
+ *
+ * @param {mat3} a matrix to represent as a string
+ * @returns {String} string representation of the matrix
+ */
+function str(a) {
+  return 'mat3(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ', ' + a[4] + ', ' + a[5] + ', ' + a[6] + ', ' + a[7] + ', ' + a[8] + ')';
+}
+
+/**
+ * Returns Frobenius norm of a mat3
+ *
+ * @param {mat3} a the matrix to calculate Frobenius norm of
+ * @returns {Number} Frobenius norm
+ */
+function frob(a) {
+  return Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2) + Math.pow(a[4], 2) + Math.pow(a[5], 2) + Math.pow(a[6], 2) + Math.pow(a[7], 2) + Math.pow(a[8], 2));
+}
+
+/**
+ * Adds two mat3's
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the first operand
+ * @param {mat3} b the second operand
+ * @returns {mat3} out
+ */
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+  out[4] = a[4] + b[4];
+  out[5] = a[5] + b[5];
+  out[6] = a[6] + b[6];
+  out[7] = a[7] + b[7];
+  out[8] = a[8] + b[8];
+  return out;
+}
+
+/**
+ * Subtracts matrix b from matrix a
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the first operand
+ * @param {mat3} b the second operand
+ * @returns {mat3} out
+ */
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  out[3] = a[3] - b[3];
+  out[4] = a[4] - b[4];
+  out[5] = a[5] - b[5];
+  out[6] = a[6] - b[6];
+  out[7] = a[7] - b[7];
+  out[8] = a[8] - b[8];
+  return out;
+}
+
+/**
+ * Multiply each element of the matrix by a scalar.
+ *
+ * @param {mat3} out the receiving matrix
+ * @param {mat3} a the matrix to scale
+ * @param {Number} b amount to scale the matrix's elements by
+ * @returns {mat3} out
+ */
+function multiplyScalar(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  out[2] = a[2] * b;
+  out[3] = a[3] * b;
+  out[4] = a[4] * b;
+  out[5] = a[5] * b;
+  out[6] = a[6] * b;
+  out[7] = a[7] * b;
+  out[8] = a[8] * b;
+  return out;
+}
+
+/**
+ * Adds two mat3's after multiplying each element of the second operand by a scalar value.
+ *
+ * @param {mat3} out the receiving vector
+ * @param {mat3} a the first operand
+ * @param {mat3} b the second operand
+ * @param {Number} scale the amount to scale b's elements by before adding
+ * @returns {mat3} out
+ */
+function multiplyScalarAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  out[2] = a[2] + b[2] * scale;
+  out[3] = a[3] + b[3] * scale;
+  out[4] = a[4] + b[4] * scale;
+  out[5] = a[5] + b[5] * scale;
+  out[6] = a[6] + b[6] * scale;
+  out[7] = a[7] + b[7] * scale;
+  out[8] = a[8] + b[8] * scale;
+  return out;
+}
+
+/**
+ * Returns whether or not the matrices have exactly the same elements in the same position (when compared with ===)
+ *
+ * @param {mat3} a The first matrix.
+ * @param {mat3} b The second matrix.
+ * @returns {Boolean} True if the matrices are equal, false otherwise.
+ */
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] && a[4] === b[4] && a[5] === b[5] && a[6] === b[6] && a[7] === b[7] && a[8] === b[8];
+}
+
+/**
+ * Returns whether or not the matrices have approximately the same elements in the same position.
+ *
+ * @param {mat3} a The first matrix.
+ * @param {mat3} b The second matrix.
+ * @returns {Boolean} True if the matrices are equal, false otherwise.
+ */
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3],
+      a4 = a[4],
+      a5 = a[5],
+      a6 = a[6],
+      a7 = a[7],
+      a8 = a[8];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3],
+      b4 = b[4],
+      b5 = b[5],
+      b6 = b[6],
+      b7 = b[7],
+      b8 = b[8];
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1)) && Math.abs(a2 - b2) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a2), Math.abs(b2)) && Math.abs(a3 - b3) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a3), Math.abs(b3)) && Math.abs(a4 - b4) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a4), Math.abs(b4)) && Math.abs(a5 - b5) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a5), Math.abs(b5)) && Math.abs(a6 - b6) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a6), Math.abs(b6)) && Math.abs(a7 - b7) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a7), Math.abs(b7)) && Math.abs(a8 - b8) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a8), Math.abs(b8));
+}
+
+/**
+ * Alias for {@link mat3.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Alias for {@link mat3.subtract}
+ * @function
+ */
+var sub = exports.sub = subtract;
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.forEach = exports.sqrLen = exports.len = exports.sqrDist = exports.dist = exports.div = exports.mul = exports.sub = undefined;
+exports.create = create;
+exports.clone = clone;
+exports.length = length;
+exports.fromValues = fromValues;
+exports.copy = copy;
+exports.set = set;
+exports.add = add;
+exports.subtract = subtract;
+exports.multiply = multiply;
+exports.divide = divide;
+exports.ceil = ceil;
+exports.floor = floor;
+exports.min = min;
+exports.max = max;
+exports.round = round;
+exports.scale = scale;
+exports.scaleAndAdd = scaleAndAdd;
+exports.distance = distance;
+exports.squaredDistance = squaredDistance;
+exports.squaredLength = squaredLength;
+exports.negate = negate;
+exports.inverse = inverse;
+exports.normalize = normalize;
+exports.dot = dot;
+exports.cross = cross;
+exports.lerp = lerp;
+exports.hermite = hermite;
+exports.bezier = bezier;
+exports.random = random;
+exports.transformMat4 = transformMat4;
+exports.transformMat3 = transformMat3;
+exports.transformQuat = transformQuat;
+exports.rotateX = rotateX;
+exports.rotateY = rotateY;
+exports.rotateZ = rotateZ;
+exports.angle = angle;
+exports.str = str;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/**
+ * 3 Dimensional Vector
+ * @module vec3
+ */
+
+/**
+ * Creates a new, empty vec3
+ *
+ * @returns {vec3} a new 3D vector
+ */
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(3);
+  out[0] = 0;
+  out[1] = 0;
+  out[2] = 0;
+  return out;
+}
+
+/**
+ * Creates a new vec3 initialized with values from an existing vector
+ *
+ * @param {vec3} a vector to clone
+ * @returns {vec3} a new 3D vector
+ */
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(3);
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  return out;
+}
+
+/**
+ * Calculates the length of a vec3
+ *
+ * @param {vec3} a vector to calculate length of
+ * @returns {Number} length of a
+ */
+function length(a) {
+  var x = a[0];
+  var y = a[1];
+  var z = a[2];
+  return Math.sqrt(x * x + y * y + z * z);
+}
+
+/**
+ * Creates a new vec3 initialized with the given values
+ *
+ * @param {Number} x X component
+ * @param {Number} y Y component
+ * @param {Number} z Z component
+ * @returns {vec3} a new 3D vector
+ */
+function fromValues(x, y, z) {
+  var out = new glMatrix.ARRAY_TYPE(3);
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  return out;
+}
+
+/**
+ * Copy the values from one vec3 to another
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the source vector
+ * @returns {vec3} out
+ */
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  return out;
+}
+
+/**
+ * Set the components of a vec3 to the given values
+ *
+ * @param {vec3} out the receiving vector
+ * @param {Number} x X component
+ * @param {Number} y Y component
+ * @param {Number} z Z component
+ * @returns {vec3} out
+ */
+function set(out, x, y, z) {
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  return out;
+}
+
+/**
+ * Adds two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  return out;
+}
+
+/**
+ * Subtracts vector b from vector a
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  return out;
+}
+
+/**
+ * Multiplies two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function multiply(out, a, b) {
+  out[0] = a[0] * b[0];
+  out[1] = a[1] * b[1];
+  out[2] = a[2] * b[2];
+  return out;
+}
+
+/**
+ * Divides two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function divide(out, a, b) {
+  out[0] = a[0] / b[0];
+  out[1] = a[1] / b[1];
+  out[2] = a[2] / b[2];
+  return out;
+}
+
+/**
+ * Math.ceil the components of a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to ceil
+ * @returns {vec3} out
+ */
+function ceil(out, a) {
+  out[0] = Math.ceil(a[0]);
+  out[1] = Math.ceil(a[1]);
+  out[2] = Math.ceil(a[2]);
+  return out;
+}
+
+/**
+ * Math.floor the components of a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to floor
+ * @returns {vec3} out
+ */
+function floor(out, a) {
+  out[0] = Math.floor(a[0]);
+  out[1] = Math.floor(a[1]);
+  out[2] = Math.floor(a[2]);
+  return out;
+}
+
+/**
+ * Returns the minimum of two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function min(out, a, b) {
+  out[0] = Math.min(a[0], b[0]);
+  out[1] = Math.min(a[1], b[1]);
+  out[2] = Math.min(a[2], b[2]);
+  return out;
+}
+
+/**
+ * Returns the maximum of two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function max(out, a, b) {
+  out[0] = Math.max(a[0], b[0]);
+  out[1] = Math.max(a[1], b[1]);
+  out[2] = Math.max(a[2], b[2]);
+  return out;
+}
+
+/**
+ * Math.round the components of a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to round
+ * @returns {vec3} out
+ */
+function round(out, a) {
+  out[0] = Math.round(a[0]);
+  out[1] = Math.round(a[1]);
+  out[2] = Math.round(a[2]);
+  return out;
+}
+
+/**
+ * Scales a vec3 by a scalar number
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the vector to scale
+ * @param {Number} b amount to scale the vector by
+ * @returns {vec3} out
+ */
+function scale(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  out[2] = a[2] * b;
+  return out;
+}
+
+/**
+ * Adds two vec3's after scaling the second operand by a scalar value
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @param {Number} scale the amount to scale b by before adding
+ * @returns {vec3} out
+ */
+function scaleAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  out[2] = a[2] + b[2] * scale;
+  return out;
+}
+
+/**
+ * Calculates the euclidian distance between two vec3's
+ *
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {Number} distance between a and b
+ */
+function distance(a, b) {
+  var x = b[0] - a[0];
+  var y = b[1] - a[1];
+  var z = b[2] - a[2];
+  return Math.sqrt(x * x + y * y + z * z);
+}
+
+/**
+ * Calculates the squared euclidian distance between two vec3's
+ *
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {Number} squared distance between a and b
+ */
+function squaredDistance(a, b) {
+  var x = b[0] - a[0];
+  var y = b[1] - a[1];
+  var z = b[2] - a[2];
+  return x * x + y * y + z * z;
+}
+
+/**
+ * Calculates the squared length of a vec3
+ *
+ * @param {vec3} a vector to calculate squared length of
+ * @returns {Number} squared length of a
+ */
+function squaredLength(a) {
+  var x = a[0];
+  var y = a[1];
+  var z = a[2];
+  return x * x + y * y + z * z;
+}
+
+/**
+ * Negates the components of a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to negate
+ * @returns {vec3} out
+ */
+function negate(out, a) {
+  out[0] = -a[0];
+  out[1] = -a[1];
+  out[2] = -a[2];
+  return out;
+}
+
+/**
+ * Returns the inverse of the components of a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to invert
+ * @returns {vec3} out
+ */
+function inverse(out, a) {
+  out[0] = 1.0 / a[0];
+  out[1] = 1.0 / a[1];
+  out[2] = 1.0 / a[2];
+  return out;
+}
+
+/**
+ * Normalize a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to normalize
+ * @returns {vec3} out
+ */
+function normalize(out, a) {
+  var x = a[0];
+  var y = a[1];
+  var z = a[2];
+  var len = x * x + y * y + z * z;
+  if (len > 0) {
+    //TODO: evaluate use of glm_invsqrt here?
+    len = 1 / Math.sqrt(len);
+    out[0] = a[0] * len;
+    out[1] = a[1] * len;
+    out[2] = a[2] * len;
+  }
+  return out;
+}
+
+/**
+ * Calculates the dot product of two vec3's
+ *
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {Number} dot product of a and b
+ */
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+/**
+ * Computes the cross product of two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function cross(out, a, b) {
+  var ax = a[0],
+      ay = a[1],
+      az = a[2];
+  var bx = b[0],
+      by = b[1],
+      bz = b[2];
+
+  out[0] = ay * bz - az * by;
+  out[1] = az * bx - ax * bz;
+  out[2] = ax * by - ay * bx;
+  return out;
+}
+
+/**
+ * Performs a linear interpolation between two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {vec3} out
+ */
+function lerp(out, a, b, t) {
+  var ax = a[0];
+  var ay = a[1];
+  var az = a[2];
+  out[0] = ax + t * (b[0] - ax);
+  out[1] = ay + t * (b[1] - ay);
+  out[2] = az + t * (b[2] - az);
+  return out;
+}
+
+/**
+ * Performs a hermite interpolation with two control points
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @param {vec3} c the third operand
+ * @param {vec3} d the fourth operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {vec3} out
+ */
+function hermite(out, a, b, c, d, t) {
+  var factorTimes2 = t * t;
+  var factor1 = factorTimes2 * (2 * t - 3) + 1;
+  var factor2 = factorTimes2 * (t - 2) + t;
+  var factor3 = factorTimes2 * (t - 1);
+  var factor4 = factorTimes2 * (3 - 2 * t);
+
+  out[0] = a[0] * factor1 + b[0] * factor2 + c[0] * factor3 + d[0] * factor4;
+  out[1] = a[1] * factor1 + b[1] * factor2 + c[1] * factor3 + d[1] * factor4;
+  out[2] = a[2] * factor1 + b[2] * factor2 + c[2] * factor3 + d[2] * factor4;
+
+  return out;
+}
+
+/**
+ * Performs a bezier interpolation with two control points
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @param {vec3} c the third operand
+ * @param {vec3} d the fourth operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {vec3} out
+ */
+function bezier(out, a, b, c, d, t) {
+  var inverseFactor = 1 - t;
+  var inverseFactorTimesTwo = inverseFactor * inverseFactor;
+  var factorTimes2 = t * t;
+  var factor1 = inverseFactorTimesTwo * inverseFactor;
+  var factor2 = 3 * t * inverseFactorTimesTwo;
+  var factor3 = 3 * factorTimes2 * inverseFactor;
+  var factor4 = factorTimes2 * t;
+
+  out[0] = a[0] * factor1 + b[0] * factor2 + c[0] * factor3 + d[0] * factor4;
+  out[1] = a[1] * factor1 + b[1] * factor2 + c[1] * factor3 + d[1] * factor4;
+  out[2] = a[2] * factor1 + b[2] * factor2 + c[2] * factor3 + d[2] * factor4;
+
+  return out;
+}
+
+/**
+ * Generates a random vector with the given scale
+ *
+ * @param {vec3} out the receiving vector
+ * @param {Number} [scale] Length of the resulting vector. If ommitted, a unit vector will be returned
+ * @returns {vec3} out
+ */
+function random(out, scale) {
+  scale = scale || 1.0;
+
+  var r = glMatrix.RANDOM() * 2.0 * Math.PI;
+  var z = glMatrix.RANDOM() * 2.0 - 1.0;
+  var zScale = Math.sqrt(1.0 - z * z) * scale;
+
+  out[0] = Math.cos(r) * zScale;
+  out[1] = Math.sin(r) * zScale;
+  out[2] = z * scale;
+  return out;
+}
+
+/**
+ * Transforms the vec3 with a mat4.
+ * 4th vector component is implicitly '1'
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the vector to transform
+ * @param {mat4} m matrix to transform with
+ * @returns {vec3} out
+ */
+function transformMat4(out, a, m) {
+  var x = a[0],
+      y = a[1],
+      z = a[2];
+  var w = m[3] * x + m[7] * y + m[11] * z + m[15];
+  w = w || 1.0;
+  out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+  out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+  out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
+  return out;
+}
+
+/**
+ * Transforms the vec3 with a mat3.
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the vector to transform
+ * @param {mat3} m the 3x3 matrix to transform with
+ * @returns {vec3} out
+ */
+function transformMat3(out, a, m) {
+  var x = a[0],
+      y = a[1],
+      z = a[2];
+  out[0] = x * m[0] + y * m[3] + z * m[6];
+  out[1] = x * m[1] + y * m[4] + z * m[7];
+  out[2] = x * m[2] + y * m[5] + z * m[8];
+  return out;
+}
+
+/**
+ * Transforms the vec3 with a quat
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the vector to transform
+ * @param {quat} q quaternion to transform with
+ * @returns {vec3} out
+ */
+function transformQuat(out, a, q) {
+  // benchmarks: http://jsperf.com/quaternion-transform-vec3-implementations
+
+  var x = a[0],
+      y = a[1],
+      z = a[2];
+  var qx = q[0],
+      qy = q[1],
+      qz = q[2],
+      qw = q[3];
+
+  // calculate quat * vec
+  var ix = qw * x + qy * z - qz * y;
+  var iy = qw * y + qz * x - qx * z;
+  var iz = qw * z + qx * y - qy * x;
+  var iw = -qx * x - qy * y - qz * z;
+
+  // calculate result * inverse quat
+  out[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
+  out[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
+  out[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
+  return out;
+}
+
+/**
+ * Rotate a 3D vector around the x-axis
+ * @param {vec3} out The receiving vec3
+ * @param {vec3} a The vec3 point to rotate
+ * @param {vec3} b The origin of the rotation
+ * @param {Number} c The angle of rotation
+ * @returns {vec3} out
+ */
+function rotateX(out, a, b, c) {
+  var p = [],
+      r = [];
+  //Translate point to the origin
+  p[0] = a[0] - b[0];
+  p[1] = a[1] - b[1];
+  p[2] = a[2] - b[2];
+
+  //perform rotation
+  r[0] = p[0];
+  r[1] = p[1] * Math.cos(c) - p[2] * Math.sin(c);
+  r[2] = p[1] * Math.sin(c) + p[2] * Math.cos(c);
+
+  //translate to correct position
+  out[0] = r[0] + b[0];
+  out[1] = r[1] + b[1];
+  out[2] = r[2] + b[2];
+
+  return out;
+}
+
+/**
+ * Rotate a 3D vector around the y-axis
+ * @param {vec3} out The receiving vec3
+ * @param {vec3} a The vec3 point to rotate
+ * @param {vec3} b The origin of the rotation
+ * @param {Number} c The angle of rotation
+ * @returns {vec3} out
+ */
+function rotateY(out, a, b, c) {
+  var p = [],
+      r = [];
+  //Translate point to the origin
+  p[0] = a[0] - b[0];
+  p[1] = a[1] - b[1];
+  p[2] = a[2] - b[2];
+
+  //perform rotation
+  r[0] = p[2] * Math.sin(c) + p[0] * Math.cos(c);
+  r[1] = p[1];
+  r[2] = p[2] * Math.cos(c) - p[0] * Math.sin(c);
+
+  //translate to correct position
+  out[0] = r[0] + b[0];
+  out[1] = r[1] + b[1];
+  out[2] = r[2] + b[2];
+
+  return out;
+}
+
+/**
+ * Rotate a 3D vector around the z-axis
+ * @param {vec3} out The receiving vec3
+ * @param {vec3} a The vec3 point to rotate
+ * @param {vec3} b The origin of the rotation
+ * @param {Number} c The angle of rotation
+ * @returns {vec3} out
+ */
+function rotateZ(out, a, b, c) {
+  var p = [],
+      r = [];
+  //Translate point to the origin
+  p[0] = a[0] - b[0];
+  p[1] = a[1] - b[1];
+  p[2] = a[2] - b[2];
+
+  //perform rotation
+  r[0] = p[0] * Math.cos(c) - p[1] * Math.sin(c);
+  r[1] = p[0] * Math.sin(c) + p[1] * Math.cos(c);
+  r[2] = p[2];
+
+  //translate to correct position
+  out[0] = r[0] + b[0];
+  out[1] = r[1] + b[1];
+  out[2] = r[2] + b[2];
+
+  return out;
+}
+
+/**
+ * Get the angle between two 3D vectors
+ * @param {vec3} a The first operand
+ * @param {vec3} b The second operand
+ * @returns {Number} The angle in radians
+ */
+function angle(a, b) {
+  var tempA = fromValues(a[0], a[1], a[2]);
+  var tempB = fromValues(b[0], b[1], b[2]);
+
+  normalize(tempA, tempA);
+  normalize(tempB, tempB);
+
+  var cosine = dot(tempA, tempB);
+
+  if (cosine > 1.0) {
+    return 0;
+  } else if (cosine < -1.0) {
+    return Math.PI;
+  } else {
+    return Math.acos(cosine);
+  }
+}
+
+/**
+ * Returns a string representation of a vector
+ *
+ * @param {vec3} a vector to represent as a string
+ * @returns {String} string representation of the vector
+ */
+function str(a) {
+  return 'vec3(' + a[0] + ', ' + a[1] + ', ' + a[2] + ')';
+}
+
+/**
+ * Returns whether or not the vectors have exactly the same elements in the same position (when compared with ===)
+ *
+ * @param {vec3} a The first vector.
+ * @param {vec3} b The second vector.
+ * @returns {Boolean} True if the vectors are equal, false otherwise.
+ */
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+/**
+ * Returns whether or not the vectors have approximately the same elements in the same position.
+ *
+ * @param {vec3} a The first vector.
+ * @param {vec3} b The second vector.
+ * @returns {Boolean} True if the vectors are equal, false otherwise.
+ */
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2];
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1)) && Math.abs(a2 - b2) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a2), Math.abs(b2));
+}
+
+/**
+ * Alias for {@link vec3.subtract}
+ * @function
+ */
+var sub = exports.sub = subtract;
+
+/**
+ * Alias for {@link vec3.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Alias for {@link vec3.divide}
+ * @function
+ */
+var div = exports.div = divide;
+
+/**
+ * Alias for {@link vec3.distance}
+ * @function
+ */
+var dist = exports.dist = distance;
+
+/**
+ * Alias for {@link vec3.squaredDistance}
+ * @function
+ */
+var sqrDist = exports.sqrDist = squaredDistance;
+
+/**
+ * Alias for {@link vec3.length}
+ * @function
+ */
+var len = exports.len = length;
+
+/**
+ * Alias for {@link vec3.squaredLength}
+ * @function
+ */
+var sqrLen = exports.sqrLen = squaredLength;
+
+/**
+ * Perform some operation over an array of vec3s.
+ *
+ * @param {Array} a the array of vectors to iterate over
+ * @param {Number} stride Number of elements between the start of each vec3. If 0 assumes tightly packed
+ * @param {Number} offset Number of elements to skip at the beginning of the array
+ * @param {Number} count Number of vec3s to iterate over. If 0 iterates over entire array
+ * @param {Function} fn Function to call for each vector in the array
+ * @param {Object} [arg] additional argument to pass to fn
+ * @returns {Array} a
+ * @function
+ */
+var forEach = exports.forEach = function () {
+  var vec = create();
+
+  return function (a, stride, offset, count, fn, arg) {
+    var i = void 0,
+        l = void 0;
+    if (!stride) {
+      stride = 3;
+    }
+
+    if (!offset) {
+      offset = 0;
+    }
+
+    if (count) {
+      l = Math.min(count * stride + offset, a.length);
+    } else {
+      l = a.length;
+    }
+
+    for (i = offset; i < l; i += stride) {
+      vec[0] = a[i];vec[1] = a[i + 1];vec[2] = a[i + 2];
+      fn(vec, vec, arg);
+      a[i] = vec[0];a[i + 1] = vec[1];a[i + 2] = vec[2];
+    }
+
+    return a;
+  };
+}();
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.forEach = exports.sqrLen = exports.len = exports.sqrDist = exports.dist = exports.div = exports.mul = exports.sub = undefined;
+exports.create = create;
+exports.clone = clone;
+exports.fromValues = fromValues;
+exports.copy = copy;
+exports.set = set;
+exports.add = add;
+exports.subtract = subtract;
+exports.multiply = multiply;
+exports.divide = divide;
+exports.ceil = ceil;
+exports.floor = floor;
+exports.min = min;
+exports.max = max;
+exports.round = round;
+exports.scale = scale;
+exports.scaleAndAdd = scaleAndAdd;
+exports.distance = distance;
+exports.squaredDistance = squaredDistance;
+exports.length = length;
+exports.squaredLength = squaredLength;
+exports.negate = negate;
+exports.inverse = inverse;
+exports.normalize = normalize;
+exports.dot = dot;
+exports.lerp = lerp;
+exports.random = random;
+exports.transformMat4 = transformMat4;
+exports.transformQuat = transformQuat;
+exports.str = str;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/**
+ * 4 Dimensional Vector
+ * @module vec4
+ */
+
+/**
+ * Creates a new, empty vec4
+ *
+ * @returns {vec4} a new 4D vector
+ */
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = 0;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  return out;
+}
+
+/**
+ * Creates a new vec4 initialized with values from an existing vector
+ *
+ * @param {vec4} a vector to clone
+ * @returns {vec4} a new 4D vector
+ */
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  return out;
+}
+
+/**
+ * Creates a new vec4 initialized with the given values
+ *
+ * @param {Number} x X component
+ * @param {Number} y Y component
+ * @param {Number} z Z component
+ * @param {Number} w W component
+ * @returns {vec4} a new 4D vector
+ */
+function fromValues(x, y, z, w) {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = w;
+  return out;
+}
+
+/**
+ * Copy the values from one vec4 to another
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the source vector
+ * @returns {vec4} out
+ */
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  return out;
+}
+
+/**
+ * Set the components of a vec4 to the given values
+ *
+ * @param {vec4} out the receiving vector
+ * @param {Number} x X component
+ * @param {Number} y Y component
+ * @param {Number} z Z component
+ * @param {Number} w W component
+ * @returns {vec4} out
+ */
+function set(out, x, y, z, w) {
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = w;
+  return out;
+}
+
+/**
+ * Adds two vec4's
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {vec4} out
+ */
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+  return out;
+}
+
+/**
+ * Subtracts vector b from vector a
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {vec4} out
+ */
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  out[3] = a[3] - b[3];
+  return out;
+}
+
+/**
+ * Multiplies two vec4's
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {vec4} out
+ */
+function multiply(out, a, b) {
+  out[0] = a[0] * b[0];
+  out[1] = a[1] * b[1];
+  out[2] = a[2] * b[2];
+  out[3] = a[3] * b[3];
+  return out;
+}
+
+/**
+ * Divides two vec4's
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {vec4} out
+ */
+function divide(out, a, b) {
+  out[0] = a[0] / b[0];
+  out[1] = a[1] / b[1];
+  out[2] = a[2] / b[2];
+  out[3] = a[3] / b[3];
+  return out;
+}
+
+/**
+ * Math.ceil the components of a vec4
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a vector to ceil
+ * @returns {vec4} out
+ */
+function ceil(out, a) {
+  out[0] = Math.ceil(a[0]);
+  out[1] = Math.ceil(a[1]);
+  out[2] = Math.ceil(a[2]);
+  out[3] = Math.ceil(a[3]);
+  return out;
+}
+
+/**
+ * Math.floor the components of a vec4
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a vector to floor
+ * @returns {vec4} out
+ */
+function floor(out, a) {
+  out[0] = Math.floor(a[0]);
+  out[1] = Math.floor(a[1]);
+  out[2] = Math.floor(a[2]);
+  out[3] = Math.floor(a[3]);
+  return out;
+}
+
+/**
+ * Returns the minimum of two vec4's
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {vec4} out
+ */
+function min(out, a, b) {
+  out[0] = Math.min(a[0], b[0]);
+  out[1] = Math.min(a[1], b[1]);
+  out[2] = Math.min(a[2], b[2]);
+  out[3] = Math.min(a[3], b[3]);
+  return out;
+}
+
+/**
+ * Returns the maximum of two vec4's
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {vec4} out
+ */
+function max(out, a, b) {
+  out[0] = Math.max(a[0], b[0]);
+  out[1] = Math.max(a[1], b[1]);
+  out[2] = Math.max(a[2], b[2]);
+  out[3] = Math.max(a[3], b[3]);
+  return out;
+}
+
+/**
+ * Math.round the components of a vec4
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a vector to round
+ * @returns {vec4} out
+ */
+function round(out, a) {
+  out[0] = Math.round(a[0]);
+  out[1] = Math.round(a[1]);
+  out[2] = Math.round(a[2]);
+  out[3] = Math.round(a[3]);
+  return out;
+}
+
+/**
+ * Scales a vec4 by a scalar number
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the vector to scale
+ * @param {Number} b amount to scale the vector by
+ * @returns {vec4} out
+ */
+function scale(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  out[2] = a[2] * b;
+  out[3] = a[3] * b;
+  return out;
+}
+
+/**
+ * Adds two vec4's after scaling the second operand by a scalar value
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @param {Number} scale the amount to scale b by before adding
+ * @returns {vec4} out
+ */
+function scaleAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  out[2] = a[2] + b[2] * scale;
+  out[3] = a[3] + b[3] * scale;
+  return out;
+}
+
+/**
+ * Calculates the euclidian distance between two vec4's
+ *
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {Number} distance between a and b
+ */
+function distance(a, b) {
+  var x = b[0] - a[0];
+  var y = b[1] - a[1];
+  var z = b[2] - a[2];
+  var w = b[3] - a[3];
+  return Math.sqrt(x * x + y * y + z * z + w * w);
+}
+
+/**
+ * Calculates the squared euclidian distance between two vec4's
+ *
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {Number} squared distance between a and b
+ */
+function squaredDistance(a, b) {
+  var x = b[0] - a[0];
+  var y = b[1] - a[1];
+  var z = b[2] - a[2];
+  var w = b[3] - a[3];
+  return x * x + y * y + z * z + w * w;
+}
+
+/**
+ * Calculates the length of a vec4
+ *
+ * @param {vec4} a vector to calculate length of
+ * @returns {Number} length of a
+ */
+function length(a) {
+  var x = a[0];
+  var y = a[1];
+  var z = a[2];
+  var w = a[3];
+  return Math.sqrt(x * x + y * y + z * z + w * w);
+}
+
+/**
+ * Calculates the squared length of a vec4
+ *
+ * @param {vec4} a vector to calculate squared length of
+ * @returns {Number} squared length of a
+ */
+function squaredLength(a) {
+  var x = a[0];
+  var y = a[1];
+  var z = a[2];
+  var w = a[3];
+  return x * x + y * y + z * z + w * w;
+}
+
+/**
+ * Negates the components of a vec4
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a vector to negate
+ * @returns {vec4} out
+ */
+function negate(out, a) {
+  out[0] = -a[0];
+  out[1] = -a[1];
+  out[2] = -a[2];
+  out[3] = -a[3];
+  return out;
+}
+
+/**
+ * Returns the inverse of the components of a vec4
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a vector to invert
+ * @returns {vec4} out
+ */
+function inverse(out, a) {
+  out[0] = 1.0 / a[0];
+  out[1] = 1.0 / a[1];
+  out[2] = 1.0 / a[2];
+  out[3] = 1.0 / a[3];
+  return out;
+}
+
+/**
+ * Normalize a vec4
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a vector to normalize
+ * @returns {vec4} out
+ */
+function normalize(out, a) {
+  var x = a[0];
+  var y = a[1];
+  var z = a[2];
+  var w = a[3];
+  var len = x * x + y * y + z * z + w * w;
+  if (len > 0) {
+    len = 1 / Math.sqrt(len);
+    out[0] = x * len;
+    out[1] = y * len;
+    out[2] = z * len;
+    out[3] = w * len;
+  }
+  return out;
+}
+
+/**
+ * Calculates the dot product of two vec4's
+ *
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @returns {Number} dot product of a and b
+ */
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+}
+
+/**
+ * Performs a linear interpolation between two vec4's
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the first operand
+ * @param {vec4} b the second operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {vec4} out
+ */
+function lerp(out, a, b, t) {
+  var ax = a[0];
+  var ay = a[1];
+  var az = a[2];
+  var aw = a[3];
+  out[0] = ax + t * (b[0] - ax);
+  out[1] = ay + t * (b[1] - ay);
+  out[2] = az + t * (b[2] - az);
+  out[3] = aw + t * (b[3] - aw);
+  return out;
+}
+
+/**
+ * Generates a random vector with the given scale
+ *
+ * @param {vec4} out the receiving vector
+ * @param {Number} [scale] Length of the resulting vector. If ommitted, a unit vector will be returned
+ * @returns {vec4} out
+ */
+function random(out, vectorScale) {
+  vectorScale = vectorScale || 1.0;
+
+  //TODO: This is a pretty awful way of doing this. Find something better.
+  out[0] = glMatrix.RANDOM();
+  out[1] = glMatrix.RANDOM();
+  out[2] = glMatrix.RANDOM();
+  out[3] = glMatrix.RANDOM();
+  normalize(out, out);
+  scale(out, out, vectorScale);
+  return out;
+}
+
+/**
+ * Transforms the vec4 with a mat4.
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the vector to transform
+ * @param {mat4} m matrix to transform with
+ * @returns {vec4} out
+ */
+function transformMat4(out, a, m) {
+  var x = a[0],
+      y = a[1],
+      z = a[2],
+      w = a[3];
+  out[0] = m[0] * x + m[4] * y + m[8] * z + m[12] * w;
+  out[1] = m[1] * x + m[5] * y + m[9] * z + m[13] * w;
+  out[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w;
+  out[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w;
+  return out;
+}
+
+/**
+ * Transforms the vec4 with a quat
+ *
+ * @param {vec4} out the receiving vector
+ * @param {vec4} a the vector to transform
+ * @param {quat} q quaternion to transform with
+ * @returns {vec4} out
+ */
+function transformQuat(out, a, q) {
+  var x = a[0],
+      y = a[1],
+      z = a[2];
+  var qx = q[0],
+      qy = q[1],
+      qz = q[2],
+      qw = q[3];
+
+  // calculate quat * vec
+  var ix = qw * x + qy * z - qz * y;
+  var iy = qw * y + qz * x - qx * z;
+  var iz = qw * z + qx * y - qy * x;
+  var iw = -qx * x - qy * y - qz * z;
+
+  // calculate result * inverse quat
+  out[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
+  out[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
+  out[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
+  out[3] = a[3];
+  return out;
+}
+
+/**
+ * Returns a string representation of a vector
+ *
+ * @param {vec4} a vector to represent as a string
+ * @returns {String} string representation of the vector
+ */
+function str(a) {
+  return 'vec4(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ')';
+}
+
+/**
+ * Returns whether or not the vectors have exactly the same elements in the same position (when compared with ===)
+ *
+ * @param {vec4} a The first vector.
+ * @param {vec4} b The second vector.
+ * @returns {Boolean} True if the vectors are equal, false otherwise.
+ */
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+}
+
+/**
+ * Returns whether or not the vectors have approximately the same elements in the same position.
+ *
+ * @param {vec4} a The first vector.
+ * @param {vec4} b The second vector.
+ * @returns {Boolean} True if the vectors are equal, false otherwise.
+ */
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3];
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1)) && Math.abs(a2 - b2) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a2), Math.abs(b2)) && Math.abs(a3 - b3) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a3), Math.abs(b3));
+}
+
+/**
+ * Alias for {@link vec4.subtract}
+ * @function
+ */
+var sub = exports.sub = subtract;
+
+/**
+ * Alias for {@link vec4.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Alias for {@link vec4.divide}
+ * @function
+ */
+var div = exports.div = divide;
+
+/**
+ * Alias for {@link vec4.distance}
+ * @function
+ */
+var dist = exports.dist = distance;
+
+/**
+ * Alias for {@link vec4.squaredDistance}
+ * @function
+ */
+var sqrDist = exports.sqrDist = squaredDistance;
+
+/**
+ * Alias for {@link vec4.length}
+ * @function
+ */
+var len = exports.len = length;
+
+/**
+ * Alias for {@link vec4.squaredLength}
+ * @function
+ */
+var sqrLen = exports.sqrLen = squaredLength;
+
+/**
+ * Perform some operation over an array of vec4s.
+ *
+ * @param {Array} a the array of vectors to iterate over
+ * @param {Number} stride Number of elements between the start of each vec4. If 0 assumes tightly packed
+ * @param {Number} offset Number of elements to skip at the beginning of the array
+ * @param {Number} count Number of vec4s to iterate over. If 0 iterates over entire array
+ * @param {Function} fn Function to call for each vector in the array
+ * @param {Object} [arg] additional argument to pass to fn
+ * @returns {Array} a
+ * @function
+ */
+var forEach = exports.forEach = function () {
+  var vec = create();
+
+  return function (a, stride, offset, count, fn, arg) {
+    var i = void 0,
+        l = void 0;
+    if (!stride) {
+      stride = 4;
+    }
+
+    if (!offset) {
+      offset = 0;
+    }
+
+    if (count) {
+      l = Math.min(count * stride + offset, a.length);
+    } else {
+      l = a.length;
+    }
+
+    for (i = offset; i < l; i += stride) {
+      vec[0] = a[i];vec[1] = a[i + 1];vec[2] = a[i + 2];vec[3] = a[i + 3];
+      fn(vec, vec, arg);
+      a[i] = vec[0];a[i + 1] = vec[1];a[i + 2] = vec[2];a[i + 3] = vec[3];
+    }
+
+    return a;
+  };
+}();
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.vec4 = exports.vec3 = exports.vec2 = exports.quat = exports.mat4 = exports.mat3 = exports.mat2d = exports.mat2 = exports.glMatrix = undefined;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+var _mat = __webpack_require__(5);
+
+var mat2 = _interopRequireWildcard(_mat);
+
+var _mat2d = __webpack_require__(6);
+
+var mat2d = _interopRequireWildcard(_mat2d);
+
+var _mat2 = __webpack_require__(1);
+
+var mat3 = _interopRequireWildcard(_mat2);
+
+var _mat3 = __webpack_require__(7);
+
+var mat4 = _interopRequireWildcard(_mat3);
+
+var _quat = __webpack_require__(8);
+
+var quat = _interopRequireWildcard(_quat);
+
+var _vec = __webpack_require__(9);
+
+var vec2 = _interopRequireWildcard(_vec);
+
+var _vec2 = __webpack_require__(2);
+
+var vec3 = _interopRequireWildcard(_vec2);
+
+var _vec3 = __webpack_require__(3);
+
+var vec4 = _interopRequireWildcard(_vec3);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+exports.glMatrix = glMatrix;
+exports.mat2 = mat2;
+exports.mat2d = mat2d;
+exports.mat3 = mat3;
+exports.mat4 = mat4;
+exports.quat = quat;
+exports.vec2 = vec2;
+exports.vec3 = vec3;
+exports.vec4 = vec4; /**
+                      * @fileoverview gl-matrix - High performance matrix and vector operations
+                      * @author Brandon Jones
+                      * @author Colin MacKenzie IV
+                      * @version 2.4.0
+                      */
 
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
@@ -13782,129 +16403,66 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE. */
 // END HEADER
 
-exports.glMatrix = require("./gl-matrix/common.js");
-exports.mat2 = require("./gl-matrix/mat2.js");
-exports.mat2d = require("./gl-matrix/mat2d.js");
-exports.mat3 = require("./gl-matrix/mat3.js");
-exports.mat4 = require("./gl-matrix/mat4.js");
-exports.quat = require("./gl-matrix/quat.js");
-exports.vec2 = require("./gl-matrix/vec2.js");
-exports.vec3 = require("./gl-matrix/vec3.js");
-exports.vec4 = require("./gl-matrix/vec4.js");
-},{"./gl-matrix/common.js":26,"./gl-matrix/mat2.js":27,"./gl-matrix/mat2d.js":28,"./gl-matrix/mat3.js":29,"./gl-matrix/mat4.js":30,"./gl-matrix/quat.js":31,"./gl-matrix/vec2.js":32,"./gl-matrix/vec3.js":33,"./gl-matrix/vec4.js":34}],26:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+"use strict";
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.sub = exports.mul = undefined;
+exports.create = create;
+exports.clone = clone;
+exports.copy = copy;
+exports.identity = identity;
+exports.fromValues = fromValues;
+exports.set = set;
+exports.transpose = transpose;
+exports.invert = invert;
+exports.adjoint = adjoint;
+exports.determinant = determinant;
+exports.multiply = multiply;
+exports.rotate = rotate;
+exports.scale = scale;
+exports.fromRotation = fromRotation;
+exports.fromScaling = fromScaling;
+exports.str = str;
+exports.frob = frob;
+exports.LDU = LDU;
+exports.add = add;
+exports.subtract = subtract;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+exports.multiplyScalar = multiplyScalar;
+exports.multiplyScalarAndAdd = multiplyScalarAndAdd;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 /**
- * @class Common utilities
- * @name glMatrix
+ * 2x2 Matrix
+ * @module mat2
  */
-var glMatrix = {};
-
-// Configuration Constants
-glMatrix.EPSILON = 0.000001;
-glMatrix.ARRAY_TYPE = (typeof Float32Array !== 'undefined') ? Float32Array : Array;
-glMatrix.RANDOM = Math.random;
-glMatrix.ENABLE_SIMD = false;
-
-// Capability detection
-glMatrix.SIMD_AVAILABLE = (glMatrix.ARRAY_TYPE === Float32Array) && ('SIMD' in this);
-glMatrix.USE_SIMD = glMatrix.ENABLE_SIMD && glMatrix.SIMD_AVAILABLE;
-
-/**
- * Sets the type of array used when creating new vectors and matrices
- *
- * @param {Type} type Array type, such as Float32Array or Array
- */
-glMatrix.setMatrixArrayType = function(type) {
-    glMatrix.ARRAY_TYPE = type;
-}
-
-var degree = Math.PI / 180;
-
-/**
-* Convert Degree To Radian
-*
-* @param {Number} Angle in Degrees
-*/
-glMatrix.toRadian = function(a){
-     return a * degree;
-}
-
-/**
- * Tests whether or not the arguments have approximately the same value, within an absolute
- * or relative tolerance of glMatrix.EPSILON (an absolute tolerance is used for values less 
- * than or equal to 1.0, and a relative tolerance is used for larger values)
- * 
- * @param {Number} a The first number to test.
- * @param {Number} b The second number to test.
- * @returns {Boolean} True if the numbers are approximately equal, false otherwise.
- */
-glMatrix.equals = function(a, b) {
-	return Math.abs(a - b) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a), Math.abs(b));
-}
-
-module.exports = glMatrix;
-
-},{}],27:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
-
-var glMatrix = require("./common.js");
-
-/**
- * @class 2x2 Matrix
- * @name mat2
- */
-var mat2 = {};
 
 /**
  * Creates a new identity mat2
  *
  * @returns {mat2} a new 2x2 matrix
  */
-mat2.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    return out;
-};
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  return out;
+}
 
 /**
  * Creates a new mat2 initialized with values from an existing matrix
@@ -13912,14 +16470,34 @@ mat2.create = function() {
  * @param {mat2} a matrix to clone
  * @returns {mat2} a new 2x2 matrix
  */
-mat2.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    return out;
-};
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  return out;
+}
 
 /**
  * Copy the values from one mat2 to another
@@ -13928,13 +16506,13 @@ mat2.clone = function(a) {
  * @param {mat2} a the source matrix
  * @returns {mat2} out
  */
-mat2.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    return out;
-};
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  return out;
+}
 
 /**
  * Set a mat2 to the identity matrix
@@ -13942,13 +16520,13 @@ mat2.copy = function(out, a) {
  * @param {mat2} out the receiving matrix
  * @returns {mat2} out
  */
-mat2.identity = function(out) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    return out;
-};
+function identity(out) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  return out;
+}
 
 /**
  * Create a new mat2 with the given values
@@ -13959,14 +16537,14 @@ mat2.identity = function(out) {
  * @param {Number} m11 Component in column 1, row 1 position (index 3)
  * @returns {mat2} out A new 2x2 matrix
  */
-mat2.fromValues = function(m00, m01, m10, m11) {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = m00;
-    out[1] = m01;
-    out[2] = m10;
-    out[3] = m11;
-    return out;
-};
+function fromValues(m00, m01, m10, m11) {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = m00;
+  out[1] = m01;
+  out[2] = m10;
+  out[3] = m11;
+  return out;
+}
 
 /**
  * Set the components of a mat2 to the given values
@@ -13978,14 +16556,13 @@ mat2.fromValues = function(m00, m01, m10, m11) {
  * @param {Number} m11 Component in column 1, row 1 position (index 3)
  * @returns {mat2} out
  */
-mat2.set = function(out, m00, m01, m10, m11) {
-    out[0] = m00;
-    out[1] = m01;
-    out[2] = m10;
-    out[3] = m11;
-    return out;
-};
-
+function set(out, m00, m01, m10, m11) {
+  out[0] = m00;
+  out[1] = m01;
+  out[2] = m10;
+  out[3] = m11;
+  return out;
+}
 
 /**
  * Transpose the values of a mat2
@@ -13994,21 +16571,22 @@ mat2.set = function(out, m00, m01, m10, m11) {
  * @param {mat2} a the source matrix
  * @returns {mat2} out
  */
-mat2.transpose = function(out, a) {
-    // If we are transposing ourselves we can skip a few steps but have to cache some values
-    if (out === a) {
-        var a1 = a[1];
-        out[1] = a[2];
-        out[2] = a1;
-    } else {
-        out[0] = a[0];
-        out[1] = a[2];
-        out[2] = a[1];
-        out[3] = a[3];
-    }
-    
-    return out;
-};
+function transpose(out, a) {
+  // If we are transposing ourselves we can skip a few steps but have to cache
+  // some values
+  if (out === a) {
+    var a1 = a[1];
+    out[1] = a[2];
+    out[2] = a1;
+  } else {
+    out[0] = a[0];
+    out[1] = a[2];
+    out[2] = a[1];
+    out[3] = a[3];
+  }
+
+  return out;
+}
 
 /**
  * Inverts a mat2
@@ -14017,24 +16595,27 @@ mat2.transpose = function(out, a) {
  * @param {mat2} a the source matrix
  * @returns {mat2} out
  */
-mat2.invert = function(out, a) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3],
+function invert(out, a) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
 
-        // Calculate the determinant
-        det = a0 * a3 - a2 * a1;
+  // Calculate the determinant
+  var det = a0 * a3 - a2 * a1;
 
-    if (!det) {
-        return null;
-    }
-    det = 1.0 / det;
-    
-    out[0] =  a3 * det;
-    out[1] = -a1 * det;
-    out[2] = -a2 * det;
-    out[3] =  a0 * det;
+  if (!det) {
+    return null;
+  }
+  det = 1.0 / det;
 
-    return out;
-};
+  out[0] = a3 * det;
+  out[1] = -a1 * det;
+  out[2] = -a2 * det;
+  out[3] = a0 * det;
+
+  return out;
+}
 
 /**
  * Calculates the adjugate of a mat2
@@ -14043,16 +16624,16 @@ mat2.invert = function(out, a) {
  * @param {mat2} a the source matrix
  * @returns {mat2} out
  */
-mat2.adjoint = function(out, a) {
-    // Caching this value is nessecary if out == a
-    var a0 = a[0];
-    out[0] =  a[3];
-    out[1] = -a[1];
-    out[2] = -a[2];
-    out[3] =  a0;
+function adjoint(out, a) {
+  // Caching this value is nessecary if out == a
+  var a0 = a[0];
+  out[0] = a[3];
+  out[1] = -a[1];
+  out[2] = -a[2];
+  out[3] = a0;
 
-    return out;
-};
+  return out;
+}
 
 /**
  * Calculates the determinant of a mat2
@@ -14060,9 +16641,9 @@ mat2.adjoint = function(out, a) {
  * @param {mat2} a the source matrix
  * @returns {Number} determinant of a
  */
-mat2.determinant = function (a) {
-    return a[0] * a[3] - a[2] * a[1];
-};
+function determinant(a) {
+  return a[0] * a[3] - a[2] * a[1];
+}
 
 /**
  * Multiplies two mat2's
@@ -14072,21 +16653,21 @@ mat2.determinant = function (a) {
  * @param {mat2} b the second operand
  * @returns {mat2} out
  */
-mat2.multiply = function (out, a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3];
-    var b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
-    out[0] = a0 * b0 + a2 * b1;
-    out[1] = a1 * b0 + a3 * b1;
-    out[2] = a0 * b2 + a2 * b3;
-    out[3] = a1 * b2 + a3 * b3;
-    return out;
-};
-
-/**
- * Alias for {@link mat2.multiply}
- * @function
- */
-mat2.mul = mat2.multiply;
+function multiply(out, a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3];
+  out[0] = a0 * b0 + a2 * b1;
+  out[1] = a1 * b0 + a3 * b1;
+  out[2] = a0 * b2 + a2 * b3;
+  out[3] = a1 * b2 + a3 * b3;
+  return out;
+}
 
 /**
  * Rotates a mat2 by the given angle
@@ -14096,16 +16677,19 @@ mat2.mul = mat2.multiply;
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat2} out
  */
-mat2.rotate = function (out, a, rad) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3],
-        s = Math.sin(rad),
-        c = Math.cos(rad);
-    out[0] = a0 *  c + a2 * s;
-    out[1] = a1 *  c + a3 * s;
-    out[2] = a0 * -s + a2 * c;
-    out[3] = a1 * -s + a3 * c;
-    return out;
-};
+function rotate(out, a, rad) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  out[0] = a0 * c + a2 * s;
+  out[1] = a1 * c + a3 * s;
+  out[2] = a0 * -s + a2 * c;
+  out[3] = a1 * -s + a3 * c;
+  return out;
+}
 
 /**
  * Scales the mat2 by the dimensions in the given vec2
@@ -14115,15 +16699,19 @@ mat2.rotate = function (out, a, rad) {
  * @param {vec2} v the vec2 to scale the matrix by
  * @returns {mat2} out
  **/
-mat2.scale = function(out, a, v) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3],
-        v0 = v[0], v1 = v[1];
-    out[0] = a0 * v0;
-    out[1] = a1 * v0;
-    out[2] = a2 * v1;
-    out[3] = a3 * v1;
-    return out;
-};
+function scale(out, a, v) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var v0 = v[0],
+      v1 = v[1];
+  out[0] = a0 * v0;
+  out[1] = a1 * v0;
+  out[2] = a2 * v1;
+  out[3] = a3 * v1;
+  return out;
+}
 
 /**
  * Creates a matrix from a given angle
@@ -14136,14 +16724,14 @@ mat2.scale = function(out, a, v) {
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat2} out
  */
-mat2.fromRotation = function(out, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad);
-    out[0] = c;
-    out[1] = s;
-    out[2] = -s;
-    out[3] = c;
-    return out;
+function fromRotation(out, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  out[0] = c;
+  out[1] = s;
+  out[2] = -s;
+  out[3] = c;
+  return out;
 }
 
 /**
@@ -14157,23 +16745,23 @@ mat2.fromRotation = function(out, rad) {
  * @param {vec2} v Scaling vector
  * @returns {mat2} out
  */
-mat2.fromScaling = function(out, v) {
-    out[0] = v[0];
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = v[1];
-    return out;
+function fromScaling(out, v) {
+  out[0] = v[0];
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = v[1];
+  return out;
 }
 
 /**
  * Returns a string representation of a mat2
  *
- * @param {mat2} mat matrix to represent as a string
+ * @param {mat2} a matrix to represent as a string
  * @returns {String} string representation of the matrix
  */
-mat2.str = function (a) {
-    return 'mat2(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ')';
-};
+function str(a) {
+  return 'mat2(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ')';
+}
 
 /**
  * Returns Frobenius norm of a mat2
@@ -14181,25 +16769,25 @@ mat2.str = function (a) {
  * @param {mat2} a the matrix to calculate Frobenius norm of
  * @returns {Number} Frobenius norm
  */
-mat2.frob = function (a) {
-    return(Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2)))
-};
+function frob(a) {
+  return Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2));
+}
 
 /**
  * Returns L, D and U matrices (Lower triangular, Diagonal and Upper triangular) by factorizing the input matrix
- * @param {mat2} L the lower triangular matrix 
- * @param {mat2} D the diagonal matrix 
- * @param {mat2} U the upper triangular matrix 
+ * @param {mat2} L the lower triangular matrix
+ * @param {mat2} D the diagonal matrix
+ * @param {mat2} U the upper triangular matrix
  * @param {mat2} a the input matrix to factorize
  */
 
-mat2.LDU = function (L, D, U, a) { 
-    L[2] = a[2]/a[0]; 
-    U[0] = a[0]; 
-    U[1] = a[1]; 
-    U[3] = a[3] - L[2] * U[1]; 
-    return [L, D, U];       
-}; 
+function LDU(L, D, U, a) {
+  L[2] = a[2] / a[0];
+  U[0] = a[0];
+  U[1] = a[1];
+  U[3] = a[3] - L[2] * U[1];
+  return [L, D, U];
+}
 
 /**
  * Adds two mat2's
@@ -14209,13 +16797,13 @@ mat2.LDU = function (L, D, U, a) {
  * @param {mat2} b the second operand
  * @returns {mat2} out
  */
-mat2.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    out[2] = a[2] + b[2];
-    out[3] = a[3] + b[3];
-    return out;
-};
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+  return out;
+}
 
 /**
  * Subtracts matrix b from matrix a
@@ -14225,19 +16813,13 @@ mat2.add = function(out, a, b) {
  * @param {mat2} b the second operand
  * @returns {mat2} out
  */
-mat2.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
-    out[3] = a[3] - b[3];
-    return out;
-};
-
-/**
- * Alias for {@link mat2.subtract}
- * @function
- */
-mat2.sub = mat2.subtract;
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  out[3] = a[3] - b[3];
+  return out;
+}
 
 /**
  * Returns whether or not the matrices have exactly the same elements in the same position (when compared with ===)
@@ -14246,9 +16828,9 @@ mat2.sub = mat2.subtract;
  * @param {mat2} b The second matrix.
  * @returns {Boolean} True if the matrices are equal, false otherwise.
  */
-mat2.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
-};
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+}
 
 /**
  * Returns whether or not the matrices have approximately the same elements in the same position.
@@ -14257,14 +16839,17 @@ mat2.exactEquals = function (a, b) {
  * @param {mat2} b The second matrix.
  * @returns {Boolean} True if the matrices are equal, false otherwise.
  */
-mat2.equals = function (a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3];
-    var b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)) &&
-            Math.abs(a2 - b2) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a2), Math.abs(b2)) &&
-            Math.abs(a3 - b3) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a3), Math.abs(b3)));
-};
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3];
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1)) && Math.abs(a2 - b2) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a2), Math.abs(b2)) && Math.abs(a3 - b3) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a3), Math.abs(b3));
+}
 
 /**
  * Multiply each element of the matrix by a scalar.
@@ -14274,13 +16859,13 @@ mat2.equals = function (a, b) {
  * @param {Number} b amount to scale the matrix's elements by
  * @returns {mat2} out
  */
-mat2.multiplyScalar = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    out[2] = a[2] * b;
-    out[3] = a[3] * b;
-    return out;
-};
+function multiplyScalar(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  out[2] = a[2] * b;
+  out[3] = a[3] * b;
+  return out;
+}
 
 /**
  * Adds two mat2's after multiplying each element of the second operand by a scalar value.
@@ -14291,44 +16876,72 @@ mat2.multiplyScalar = function(out, a, b) {
  * @param {Number} scale the amount to scale b's elements by before adding
  * @returns {mat2} out
  */
-mat2.multiplyScalarAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    out[2] = a[2] + (b[2] * scale);
-    out[3] = a[3] + (b[3] * scale);
-    return out;
-};
-
-module.exports = mat2;
-
-},{"./common.js":26}],28:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
-
-var glMatrix = require("./common.js");
+function multiplyScalarAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  out[2] = a[2] + b[2] * scale;
+  out[3] = a[3] + b[3] * scale;
+  return out;
+}
 
 /**
- * @class 2x3 Matrix
- * @name mat2d
- * 
- * @description 
+ * Alias for {@link mat2.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Alias for {@link mat2.subtract}
+ * @function
+ */
+var sub = exports.sub = subtract;
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.sub = exports.mul = undefined;
+exports.create = create;
+exports.clone = clone;
+exports.copy = copy;
+exports.identity = identity;
+exports.fromValues = fromValues;
+exports.set = set;
+exports.invert = invert;
+exports.determinant = determinant;
+exports.multiply = multiply;
+exports.rotate = rotate;
+exports.scale = scale;
+exports.translate = translate;
+exports.fromRotation = fromRotation;
+exports.fromScaling = fromScaling;
+exports.fromTranslation = fromTranslation;
+exports.str = str;
+exports.frob = frob;
+exports.add = add;
+exports.subtract = subtract;
+exports.multiplyScalar = multiplyScalar;
+exports.multiplyScalarAndAdd = multiplyScalarAndAdd;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/**
+ * 2x3 Matrix
+ * @module mat2d
+ *
+ * @description
  * A mat2d contains six elements defined as:
  * <pre>
  * [a, c, tx,
@@ -14342,23 +16955,22 @@ var glMatrix = require("./common.js");
  * </pre>
  * The last row is ignored so the array is shorter and operations are faster.
  */
-var mat2d = {};
 
 /**
  * Creates a new identity mat2d
  *
  * @returns {mat2d} a new 2x3 matrix
  */
-mat2d.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(6);
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    out[4] = 0;
-    out[5] = 0;
-    return out;
-};
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(6);
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  out[4] = 0;
+  out[5] = 0;
+  return out;
+}
 
 /**
  * Creates a new mat2d initialized with values from an existing matrix
@@ -14366,16 +16978,36 @@ mat2d.create = function() {
  * @param {mat2d} a matrix to clone
  * @returns {mat2d} a new 2x3 matrix
  */
-mat2d.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(6);
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    out[4] = a[4];
-    out[5] = a[5];
-    return out;
-};
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(6);
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  out[4] = a[4];
+  out[5] = a[5];
+  return out;
+}
 
 /**
  * Copy the values from one mat2d to another
@@ -14384,15 +17016,15 @@ mat2d.clone = function(a) {
  * @param {mat2d} a the source matrix
  * @returns {mat2d} out
  */
-mat2d.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    out[4] = a[4];
-    out[5] = a[5];
-    return out;
-};
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  out[4] = a[4];
+  out[5] = a[5];
+  return out;
+}
 
 /**
  * Set a mat2d to the identity matrix
@@ -14400,15 +17032,15 @@ mat2d.copy = function(out, a) {
  * @param {mat2d} out the receiving matrix
  * @returns {mat2d} out
  */
-mat2d.identity = function(out) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    out[4] = 0;
-    out[5] = 0;
-    return out;
-};
+function identity(out) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  out[4] = 0;
+  out[5] = 0;
+  return out;
+}
 
 /**
  * Create a new mat2d with the given values
@@ -14421,16 +17053,16 @@ mat2d.identity = function(out) {
  * @param {Number} ty Component TY (index 5)
  * @returns {mat2d} A new mat2d
  */
-mat2d.fromValues = function(a, b, c, d, tx, ty) {
-    var out = new glMatrix.ARRAY_TYPE(6);
-    out[0] = a;
-    out[1] = b;
-    out[2] = c;
-    out[3] = d;
-    out[4] = tx;
-    out[5] = ty;
-    return out;
-};
+function fromValues(a, b, c, d, tx, ty) {
+  var out = new glMatrix.ARRAY_TYPE(6);
+  out[0] = a;
+  out[1] = b;
+  out[2] = c;
+  out[3] = d;
+  out[4] = tx;
+  out[5] = ty;
+  return out;
+}
 
 /**
  * Set the components of a mat2d to the given values
@@ -14444,15 +17076,15 @@ mat2d.fromValues = function(a, b, c, d, tx, ty) {
  * @param {Number} ty Component TY (index 5)
  * @returns {mat2d} out
  */
-mat2d.set = function(out, a, b, c, d, tx, ty) {
-    out[0] = a;
-    out[1] = b;
-    out[2] = c;
-    out[3] = d;
-    out[4] = tx;
-    out[5] = ty;
-    return out;
-};
+function set(out, a, b, c, d, tx, ty) {
+  out[0] = a;
+  out[1] = b;
+  out[2] = c;
+  out[3] = d;
+  out[4] = tx;
+  out[5] = ty;
+  return out;
+}
 
 /**
  * Inverts a mat2d
@@ -14461,24 +17093,28 @@ mat2d.set = function(out, a, b, c, d, tx, ty) {
  * @param {mat2d} a the source matrix
  * @returns {mat2d} out
  */
-mat2d.invert = function(out, a) {
-    var aa = a[0], ab = a[1], ac = a[2], ad = a[3],
-        atx = a[4], aty = a[5];
+function invert(out, a) {
+  var aa = a[0],
+      ab = a[1],
+      ac = a[2],
+      ad = a[3];
+  var atx = a[4],
+      aty = a[5];
 
-    var det = aa * ad - ab * ac;
-    if(!det){
-        return null;
-    }
-    det = 1.0 / det;
+  var det = aa * ad - ab * ac;
+  if (!det) {
+    return null;
+  }
+  det = 1.0 / det;
 
-    out[0] = ad * det;
-    out[1] = -ab * det;
-    out[2] = -ac * det;
-    out[3] = aa * det;
-    out[4] = (ac * aty - ad * atx) * det;
-    out[5] = (ab * atx - aa * aty) * det;
-    return out;
-};
+  out[0] = ad * det;
+  out[1] = -ab * det;
+  out[2] = -ac * det;
+  out[3] = aa * det;
+  out[4] = (ac * aty - ad * atx) * det;
+  out[5] = (ab * atx - aa * aty) * det;
+  return out;
+}
 
 /**
  * Calculates the determinant of a mat2d
@@ -14486,9 +17122,9 @@ mat2d.invert = function(out, a) {
  * @param {mat2d} a the source matrix
  * @returns {Number} determinant of a
  */
-mat2d.determinant = function (a) {
-    return a[0] * a[3] - a[1] * a[2];
-};
+function determinant(a) {
+  return a[0] * a[3] - a[1] * a[2];
+}
 
 /**
  * Multiplies two mat2d's
@@ -14498,23 +17134,27 @@ mat2d.determinant = function (a) {
  * @param {mat2d} b the second operand
  * @returns {mat2d} out
  */
-mat2d.multiply = function (out, a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5],
-        b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3], b4 = b[4], b5 = b[5];
-    out[0] = a0 * b0 + a2 * b1;
-    out[1] = a1 * b0 + a3 * b1;
-    out[2] = a0 * b2 + a2 * b3;
-    out[3] = a1 * b2 + a3 * b3;
-    out[4] = a0 * b4 + a2 * b5 + a4;
-    out[5] = a1 * b4 + a3 * b5 + a5;
-    return out;
-};
-
-/**
- * Alias for {@link mat2d.multiply}
- * @function
- */
-mat2d.mul = mat2d.multiply;
+function multiply(out, a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3],
+      a4 = a[4],
+      a5 = a[5];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3],
+      b4 = b[4],
+      b5 = b[5];
+  out[0] = a0 * b0 + a2 * b1;
+  out[1] = a1 * b0 + a3 * b1;
+  out[2] = a0 * b2 + a2 * b3;
+  out[3] = a1 * b2 + a3 * b3;
+  out[4] = a0 * b4 + a2 * b5 + a4;
+  out[5] = a1 * b4 + a3 * b5 + a5;
+  return out;
+}
 
 /**
  * Rotates a mat2d by the given angle
@@ -14524,18 +17164,23 @@ mat2d.mul = mat2d.multiply;
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat2d} out
  */
-mat2d.rotate = function (out, a, rad) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5],
-        s = Math.sin(rad),
-        c = Math.cos(rad);
-    out[0] = a0 *  c + a2 * s;
-    out[1] = a1 *  c + a3 * s;
-    out[2] = a0 * -s + a2 * c;
-    out[3] = a1 * -s + a3 * c;
-    out[4] = a4;
-    out[5] = a5;
-    return out;
-};
+function rotate(out, a, rad) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3],
+      a4 = a[4],
+      a5 = a[5];
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  out[0] = a0 * c + a2 * s;
+  out[1] = a1 * c + a3 * s;
+  out[2] = a0 * -s + a2 * c;
+  out[3] = a1 * -s + a3 * c;
+  out[4] = a4;
+  out[5] = a5;
+  return out;
+}
 
 /**
  * Scales the mat2d by the dimensions in the given vec2
@@ -14545,17 +17190,23 @@ mat2d.rotate = function (out, a, rad) {
  * @param {vec2} v the vec2 to scale the matrix by
  * @returns {mat2d} out
  **/
-mat2d.scale = function(out, a, v) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5],
-        v0 = v[0], v1 = v[1];
-    out[0] = a0 * v0;
-    out[1] = a1 * v0;
-    out[2] = a2 * v1;
-    out[3] = a3 * v1;
-    out[4] = a4;
-    out[5] = a5;
-    return out;
-};
+function scale(out, a, v) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3],
+      a4 = a[4],
+      a5 = a[5];
+  var v0 = v[0],
+      v1 = v[1];
+  out[0] = a0 * v0;
+  out[1] = a1 * v0;
+  out[2] = a2 * v1;
+  out[3] = a3 * v1;
+  out[4] = a4;
+  out[5] = a5;
+  return out;
+}
 
 /**
  * Translates the mat2d by the dimensions in the given vec2
@@ -14565,17 +17216,23 @@ mat2d.scale = function(out, a, v) {
  * @param {vec2} v the vec2 to translate the matrix by
  * @returns {mat2d} out
  **/
-mat2d.translate = function(out, a, v) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5],
-        v0 = v[0], v1 = v[1];
-    out[0] = a0;
-    out[1] = a1;
-    out[2] = a2;
-    out[3] = a3;
-    out[4] = a0 * v0 + a2 * v1 + a4;
-    out[5] = a1 * v0 + a3 * v1 + a5;
-    return out;
-};
+function translate(out, a, v) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3],
+      a4 = a[4],
+      a5 = a[5];
+  var v0 = v[0],
+      v1 = v[1];
+  out[0] = a0;
+  out[1] = a1;
+  out[2] = a2;
+  out[3] = a3;
+  out[4] = a0 * v0 + a2 * v1 + a4;
+  out[5] = a1 * v0 + a3 * v1 + a5;
+  return out;
+}
 
 /**
  * Creates a matrix from a given angle
@@ -14588,15 +17245,16 @@ mat2d.translate = function(out, a, v) {
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat2d} out
  */
-mat2d.fromRotation = function(out, rad) {
-    var s = Math.sin(rad), c = Math.cos(rad);
-    out[0] = c;
-    out[1] = s;
-    out[2] = -s;
-    out[3] = c;
-    out[4] = 0;
-    out[5] = 0;
-    return out;
+function fromRotation(out, rad) {
+  var s = Math.sin(rad),
+      c = Math.cos(rad);
+  out[0] = c;
+  out[1] = s;
+  out[2] = -s;
+  out[3] = c;
+  out[4] = 0;
+  out[5] = 0;
+  return out;
 }
 
 /**
@@ -14610,14 +17268,14 @@ mat2d.fromRotation = function(out, rad) {
  * @param {vec2} v Scaling vector
  * @returns {mat2d} out
  */
-mat2d.fromScaling = function(out, v) {
-    out[0] = v[0];
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = v[1];
-    out[4] = 0;
-    out[5] = 0;
-    return out;
+function fromScaling(out, v) {
+  out[0] = v[0];
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = v[1];
+  out[4] = 0;
+  out[5] = 0;
+  return out;
 }
 
 /**
@@ -14631,14 +17289,14 @@ mat2d.fromScaling = function(out, v) {
  * @param {vec2} v Translation vector
  * @returns {mat2d} out
  */
-mat2d.fromTranslation = function(out, v) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    out[4] = v[0];
-    out[5] = v[1];
-    return out;
+function fromTranslation(out, v) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  out[4] = v[0];
+  out[5] = v[1];
+  return out;
 }
 
 /**
@@ -14647,10 +17305,9 @@ mat2d.fromTranslation = function(out, v) {
  * @param {mat2d} a matrix to represent as a string
  * @returns {String} string representation of the matrix
  */
-mat2d.str = function (a) {
-    return 'mat2d(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + 
-                    a[3] + ', ' + a[4] + ', ' + a[5] + ')';
-};
+function str(a) {
+  return 'mat2d(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ', ' + a[4] + ', ' + a[5] + ')';
+}
 
 /**
  * Returns Frobenius norm of a mat2d
@@ -14658,9 +17315,9 @@ mat2d.str = function (a) {
  * @param {mat2d} a the matrix to calculate Frobenius norm of
  * @returns {Number} Frobenius norm
  */
-mat2d.frob = function (a) { 
-    return(Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2) + Math.pow(a[4], 2) + Math.pow(a[5], 2) + 1))
-}; 
+function frob(a) {
+  return Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2) + Math.pow(a[4], 2) + Math.pow(a[5], 2) + 1);
+}
 
 /**
  * Adds two mat2d's
@@ -14670,15 +17327,15 @@ mat2d.frob = function (a) {
  * @param {mat2d} b the second operand
  * @returns {mat2d} out
  */
-mat2d.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    out[2] = a[2] + b[2];
-    out[3] = a[3] + b[3];
-    out[4] = a[4] + b[4];
-    out[5] = a[5] + b[5];
-    return out;
-};
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+  out[4] = a[4] + b[4];
+  out[5] = a[5] + b[5];
+  return out;
+}
 
 /**
  * Subtracts matrix b from matrix a
@@ -14688,21 +17345,15 @@ mat2d.add = function(out, a, b) {
  * @param {mat2d} b the second operand
  * @returns {mat2d} out
  */
-mat2d.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
-    out[3] = a[3] - b[3];
-    out[4] = a[4] - b[4];
-    out[5] = a[5] - b[5];
-    return out;
-};
-
-/**
- * Alias for {@link mat2d.subtract}
- * @function
- */
-mat2d.sub = mat2d.subtract;
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  out[3] = a[3] - b[3];
+  out[4] = a[4] - b[4];
+  out[5] = a[5] - b[5];
+  return out;
+}
 
 /**
  * Multiply each element of the matrix by a scalar.
@@ -14712,15 +17363,15 @@ mat2d.sub = mat2d.subtract;
  * @param {Number} b amount to scale the matrix's elements by
  * @returns {mat2d} out
  */
-mat2d.multiplyScalar = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    out[2] = a[2] * b;
-    out[3] = a[3] * b;
-    out[4] = a[4] * b;
-    out[5] = a[5] * b;
-    return out;
-};
+function multiplyScalar(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  out[2] = a[2] * b;
+  out[3] = a[3] * b;
+  out[4] = a[4] * b;
+  out[5] = a[5] * b;
+  return out;
+}
 
 /**
  * Adds two mat2d's after multiplying each element of the second operand by a scalar value.
@@ -14731,15 +17382,15 @@ mat2d.multiplyScalar = function(out, a, b) {
  * @param {Number} scale the amount to scale b's elements by before adding
  * @returns {mat2d} out
  */
-mat2d.multiplyScalarAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    out[2] = a[2] + (b[2] * scale);
-    out[3] = a[3] + (b[3] * scale);
-    out[4] = a[4] + (b[4] * scale);
-    out[5] = a[5] + (b[5] * scale);
-    return out;
-};
+function multiplyScalarAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  out[2] = a[2] + b[2] * scale;
+  out[3] = a[3] + b[3] * scale;
+  out[4] = a[4] + b[4] * scale;
+  out[5] = a[5] + b[5] * scale;
+  return out;
+}
 
 /**
  * Returns whether or not the matrices have exactly the same elements in the same position (when compared with ===)
@@ -14748,9 +17399,9 @@ mat2d.multiplyScalarAndAdd = function(out, a, b, scale) {
  * @param {mat2d} b The second matrix.
  * @returns {Boolean} True if the matrices are equal, false otherwise.
  */
-mat2d.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] && a[4] === b[4] && a[5] === b[5];
-};
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] && a[4] === b[4] && a[5] === b[5];
+}
 
 /**
  * Returns whether or not the matrices have approximately the same elements in the same position.
@@ -14759,824 +17410,126 @@ mat2d.exactEquals = function (a, b) {
  * @param {mat2d} b The second matrix.
  * @returns {Boolean} True if the matrices are equal, false otherwise.
  */
-mat2d.equals = function (a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5];
-    var b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3], b4 = b[4], b5 = b[5];
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)) &&
-            Math.abs(a2 - b2) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a2), Math.abs(b2)) &&
-            Math.abs(a3 - b3) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a3), Math.abs(b3)) &&
-            Math.abs(a4 - b4) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a4), Math.abs(b4)) &&
-            Math.abs(a5 - b5) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a5), Math.abs(b5)));
-};
-
-module.exports = mat2d;
-
-},{"./common.js":26}],29:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
-
-var glMatrix = require("./common.js");
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3],
+      a4 = a[4],
+      a5 = a[5];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3],
+      b4 = b[4],
+      b5 = b[5];
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1)) && Math.abs(a2 - b2) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a2), Math.abs(b2)) && Math.abs(a3 - b3) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a3), Math.abs(b3)) && Math.abs(a4 - b4) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a4), Math.abs(b4)) && Math.abs(a5 - b5) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a5), Math.abs(b5));
+}
 
 /**
- * @class 3x3 Matrix
- * @name mat3
- */
-var mat3 = {};
-
-/**
- * Creates a new identity mat3
- *
- * @returns {mat3} a new 3x3 matrix
- */
-mat3.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(9);
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 1;
-    out[5] = 0;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 1;
-    return out;
-};
-
-/**
- * Copies the upper-left 3x3 values into the given mat3.
- *
- * @param {mat3} out the receiving 3x3 matrix
- * @param {mat4} a   the source 4x4 matrix
- * @returns {mat3} out
- */
-mat3.fromMat4 = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[4];
-    out[4] = a[5];
-    out[5] = a[6];
-    out[6] = a[8];
-    out[7] = a[9];
-    out[8] = a[10];
-    return out;
-};
-
-/**
- * Creates a new mat3 initialized with values from an existing matrix
- *
- * @param {mat3} a matrix to clone
- * @returns {mat3} a new 3x3 matrix
- */
-mat3.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(9);
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    out[4] = a[4];
-    out[5] = a[5];
-    out[6] = a[6];
-    out[7] = a[7];
-    out[8] = a[8];
-    return out;
-};
-
-/**
- * Copy the values from one mat3 to another
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the source matrix
- * @returns {mat3} out
- */
-mat3.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    out[4] = a[4];
-    out[5] = a[5];
-    out[6] = a[6];
-    out[7] = a[7];
-    out[8] = a[8];
-    return out;
-};
-
-/**
- * Create a new mat3 with the given values
- *
- * @param {Number} m00 Component in column 0, row 0 position (index 0)
- * @param {Number} m01 Component in column 0, row 1 position (index 1)
- * @param {Number} m02 Component in column 0, row 2 position (index 2)
- * @param {Number} m10 Component in column 1, row 0 position (index 3)
- * @param {Number} m11 Component in column 1, row 1 position (index 4)
- * @param {Number} m12 Component in column 1, row 2 position (index 5)
- * @param {Number} m20 Component in column 2, row 0 position (index 6)
- * @param {Number} m21 Component in column 2, row 1 position (index 7)
- * @param {Number} m22 Component in column 2, row 2 position (index 8)
- * @returns {mat3} A new mat3
- */
-mat3.fromValues = function(m00, m01, m02, m10, m11, m12, m20, m21, m22) {
-    var out = new glMatrix.ARRAY_TYPE(9);
-    out[0] = m00;
-    out[1] = m01;
-    out[2] = m02;
-    out[3] = m10;
-    out[4] = m11;
-    out[5] = m12;
-    out[6] = m20;
-    out[7] = m21;
-    out[8] = m22;
-    return out;
-};
-
-/**
- * Set the components of a mat3 to the given values
- *
- * @param {mat3} out the receiving matrix
- * @param {Number} m00 Component in column 0, row 0 position (index 0)
- * @param {Number} m01 Component in column 0, row 1 position (index 1)
- * @param {Number} m02 Component in column 0, row 2 position (index 2)
- * @param {Number} m10 Component in column 1, row 0 position (index 3)
- * @param {Number} m11 Component in column 1, row 1 position (index 4)
- * @param {Number} m12 Component in column 1, row 2 position (index 5)
- * @param {Number} m20 Component in column 2, row 0 position (index 6)
- * @param {Number} m21 Component in column 2, row 1 position (index 7)
- * @param {Number} m22 Component in column 2, row 2 position (index 8)
- * @returns {mat3} out
- */
-mat3.set = function(out, m00, m01, m02, m10, m11, m12, m20, m21, m22) {
-    out[0] = m00;
-    out[1] = m01;
-    out[2] = m02;
-    out[3] = m10;
-    out[4] = m11;
-    out[5] = m12;
-    out[6] = m20;
-    out[7] = m21;
-    out[8] = m22;
-    return out;
-};
-
-/**
- * Set a mat3 to the identity matrix
- *
- * @param {mat3} out the receiving matrix
- * @returns {mat3} out
- */
-mat3.identity = function(out) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 1;
-    out[5] = 0;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 1;
-    return out;
-};
-
-/**
- * Transpose the values of a mat3
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the source matrix
- * @returns {mat3} out
- */
-mat3.transpose = function(out, a) {
-    // If we are transposing ourselves we can skip a few steps but have to cache some values
-    if (out === a) {
-        var a01 = a[1], a02 = a[2], a12 = a[5];
-        out[1] = a[3];
-        out[2] = a[6];
-        out[3] = a01;
-        out[5] = a[7];
-        out[6] = a02;
-        out[7] = a12;
-    } else {
-        out[0] = a[0];
-        out[1] = a[3];
-        out[2] = a[6];
-        out[3] = a[1];
-        out[4] = a[4];
-        out[5] = a[7];
-        out[6] = a[2];
-        out[7] = a[5];
-        out[8] = a[8];
-    }
-    
-    return out;
-};
-
-/**
- * Inverts a mat3
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the source matrix
- * @returns {mat3} out
- */
-mat3.invert = function(out, a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2],
-        a10 = a[3], a11 = a[4], a12 = a[5],
-        a20 = a[6], a21 = a[7], a22 = a[8],
-
-        b01 = a22 * a11 - a12 * a21,
-        b11 = -a22 * a10 + a12 * a20,
-        b21 = a21 * a10 - a11 * a20,
-
-        // Calculate the determinant
-        det = a00 * b01 + a01 * b11 + a02 * b21;
-
-    if (!det) { 
-        return null; 
-    }
-    det = 1.0 / det;
-
-    out[0] = b01 * det;
-    out[1] = (-a22 * a01 + a02 * a21) * det;
-    out[2] = (a12 * a01 - a02 * a11) * det;
-    out[3] = b11 * det;
-    out[4] = (a22 * a00 - a02 * a20) * det;
-    out[5] = (-a12 * a00 + a02 * a10) * det;
-    out[6] = b21 * det;
-    out[7] = (-a21 * a00 + a01 * a20) * det;
-    out[8] = (a11 * a00 - a01 * a10) * det;
-    return out;
-};
-
-/**
- * Calculates the adjugate of a mat3
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the source matrix
- * @returns {mat3} out
- */
-mat3.adjoint = function(out, a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2],
-        a10 = a[3], a11 = a[4], a12 = a[5],
-        a20 = a[6], a21 = a[7], a22 = a[8];
-
-    out[0] = (a11 * a22 - a12 * a21);
-    out[1] = (a02 * a21 - a01 * a22);
-    out[2] = (a01 * a12 - a02 * a11);
-    out[3] = (a12 * a20 - a10 * a22);
-    out[4] = (a00 * a22 - a02 * a20);
-    out[5] = (a02 * a10 - a00 * a12);
-    out[6] = (a10 * a21 - a11 * a20);
-    out[7] = (a01 * a20 - a00 * a21);
-    out[8] = (a00 * a11 - a01 * a10);
-    return out;
-};
-
-/**
- * Calculates the determinant of a mat3
- *
- * @param {mat3} a the source matrix
- * @returns {Number} determinant of a
- */
-mat3.determinant = function (a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2],
-        a10 = a[3], a11 = a[4], a12 = a[5],
-        a20 = a[6], a21 = a[7], a22 = a[8];
-
-    return a00 * (a22 * a11 - a12 * a21) + a01 * (-a22 * a10 + a12 * a20) + a02 * (a21 * a10 - a11 * a20);
-};
-
-/**
- * Multiplies two mat3's
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the first operand
- * @param {mat3} b the second operand
- * @returns {mat3} out
- */
-mat3.multiply = function (out, a, b) {
-    var a00 = a[0], a01 = a[1], a02 = a[2],
-        a10 = a[3], a11 = a[4], a12 = a[5],
-        a20 = a[6], a21 = a[7], a22 = a[8],
-
-        b00 = b[0], b01 = b[1], b02 = b[2],
-        b10 = b[3], b11 = b[4], b12 = b[5],
-        b20 = b[6], b21 = b[7], b22 = b[8];
-
-    out[0] = b00 * a00 + b01 * a10 + b02 * a20;
-    out[1] = b00 * a01 + b01 * a11 + b02 * a21;
-    out[2] = b00 * a02 + b01 * a12 + b02 * a22;
-
-    out[3] = b10 * a00 + b11 * a10 + b12 * a20;
-    out[4] = b10 * a01 + b11 * a11 + b12 * a21;
-    out[5] = b10 * a02 + b11 * a12 + b12 * a22;
-
-    out[6] = b20 * a00 + b21 * a10 + b22 * a20;
-    out[7] = b20 * a01 + b21 * a11 + b22 * a21;
-    out[8] = b20 * a02 + b21 * a12 + b22 * a22;
-    return out;
-};
-
-/**
- * Alias for {@link mat3.multiply}
+ * Alias for {@link mat2d.multiply}
  * @function
  */
-mat3.mul = mat3.multiply;
+var mul = exports.mul = multiply;
 
 /**
- * Translate a mat3 by the given vector
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the matrix to translate
- * @param {vec2} v vector to translate by
- * @returns {mat3} out
- */
-mat3.translate = function(out, a, v) {
-    var a00 = a[0], a01 = a[1], a02 = a[2],
-        a10 = a[3], a11 = a[4], a12 = a[5],
-        a20 = a[6], a21 = a[7], a22 = a[8],
-        x = v[0], y = v[1];
-
-    out[0] = a00;
-    out[1] = a01;
-    out[2] = a02;
-
-    out[3] = a10;
-    out[4] = a11;
-    out[5] = a12;
-
-    out[6] = x * a00 + y * a10 + a20;
-    out[7] = x * a01 + y * a11 + a21;
-    out[8] = x * a02 + y * a12 + a22;
-    return out;
-};
-
-/**
- * Rotates a mat3 by the given angle
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat3} out
- */
-mat3.rotate = function (out, a, rad) {
-    var a00 = a[0], a01 = a[1], a02 = a[2],
-        a10 = a[3], a11 = a[4], a12 = a[5],
-        a20 = a[6], a21 = a[7], a22 = a[8],
-
-        s = Math.sin(rad),
-        c = Math.cos(rad);
-
-    out[0] = c * a00 + s * a10;
-    out[1] = c * a01 + s * a11;
-    out[2] = c * a02 + s * a12;
-
-    out[3] = c * a10 - s * a00;
-    out[4] = c * a11 - s * a01;
-    out[5] = c * a12 - s * a02;
-
-    out[6] = a20;
-    out[7] = a21;
-    out[8] = a22;
-    return out;
-};
-
-/**
- * Scales the mat3 by the dimensions in the given vec2
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the matrix to rotate
- * @param {vec2} v the vec2 to scale the matrix by
- * @returns {mat3} out
- **/
-mat3.scale = function(out, a, v) {
-    var x = v[0], y = v[1];
-
-    out[0] = x * a[0];
-    out[1] = x * a[1];
-    out[2] = x * a[2];
-
-    out[3] = y * a[3];
-    out[4] = y * a[4];
-    out[5] = y * a[5];
-
-    out[6] = a[6];
-    out[7] = a[7];
-    out[8] = a[8];
-    return out;
-};
-
-/**
- * Creates a matrix from a vector translation
- * This is equivalent to (but much faster than):
- *
- *     mat3.identity(dest);
- *     mat3.translate(dest, dest, vec);
- *
- * @param {mat3} out mat3 receiving operation result
- * @param {vec2} v Translation vector
- * @returns {mat3} out
- */
-mat3.fromTranslation = function(out, v) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 1;
-    out[5] = 0;
-    out[6] = v[0];
-    out[7] = v[1];
-    out[8] = 1;
-    return out;
-}
-
-/**
- * Creates a matrix from a given angle
- * This is equivalent to (but much faster than):
- *
- *     mat3.identity(dest);
- *     mat3.rotate(dest, dest, rad);
- *
- * @param {mat3} out mat3 receiving operation result
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat3} out
- */
-mat3.fromRotation = function(out, rad) {
-    var s = Math.sin(rad), c = Math.cos(rad);
-
-    out[0] = c;
-    out[1] = s;
-    out[2] = 0;
-
-    out[3] = -s;
-    out[4] = c;
-    out[5] = 0;
-
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 1;
-    return out;
-}
-
-/**
- * Creates a matrix from a vector scaling
- * This is equivalent to (but much faster than):
- *
- *     mat3.identity(dest);
- *     mat3.scale(dest, dest, vec);
- *
- * @param {mat3} out mat3 receiving operation result
- * @param {vec2} v Scaling vector
- * @returns {mat3} out
- */
-mat3.fromScaling = function(out, v) {
-    out[0] = v[0];
-    out[1] = 0;
-    out[2] = 0;
-
-    out[3] = 0;
-    out[4] = v[1];
-    out[5] = 0;
-
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 1;
-    return out;
-}
-
-/**
- * Copies the values from a mat2d into a mat3
- *
- * @param {mat3} out the receiving matrix
- * @param {mat2d} a the matrix to copy
- * @returns {mat3} out
- **/
-mat3.fromMat2d = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = 0;
-
-    out[3] = a[2];
-    out[4] = a[3];
-    out[5] = 0;
-
-    out[6] = a[4];
-    out[7] = a[5];
-    out[8] = 1;
-    return out;
-};
-
-/**
-* Calculates a 3x3 matrix from the given quaternion
-*
-* @param {mat3} out mat3 receiving operation result
-* @param {quat} q Quaternion to create matrix from
-*
-* @returns {mat3} out
-*/
-mat3.fromQuat = function (out, q) {
-    var x = q[0], y = q[1], z = q[2], w = q[3],
-        x2 = x + x,
-        y2 = y + y,
-        z2 = z + z,
-
-        xx = x * x2,
-        yx = y * x2,
-        yy = y * y2,
-        zx = z * x2,
-        zy = z * y2,
-        zz = z * z2,
-        wx = w * x2,
-        wy = w * y2,
-        wz = w * z2;
-
-    out[0] = 1 - yy - zz;
-    out[3] = yx - wz;
-    out[6] = zx + wy;
-
-    out[1] = yx + wz;
-    out[4] = 1 - xx - zz;
-    out[7] = zy - wx;
-
-    out[2] = zx - wy;
-    out[5] = zy + wx;
-    out[8] = 1 - xx - yy;
-
-    return out;
-};
-
-/**
-* Calculates a 3x3 normal matrix (transpose inverse) from the 4x4 matrix
-*
-* @param {mat3} out mat3 receiving operation result
-* @param {mat4} a Mat4 to derive the normal matrix from
-*
-* @returns {mat3} out
-*/
-mat3.normalFromMat4 = function (out, a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
-
-        b00 = a00 * a11 - a01 * a10,
-        b01 = a00 * a12 - a02 * a10,
-        b02 = a00 * a13 - a03 * a10,
-        b03 = a01 * a12 - a02 * a11,
-        b04 = a01 * a13 - a03 * a11,
-        b05 = a02 * a13 - a03 * a12,
-        b06 = a20 * a31 - a21 * a30,
-        b07 = a20 * a32 - a22 * a30,
-        b08 = a20 * a33 - a23 * a30,
-        b09 = a21 * a32 - a22 * a31,
-        b10 = a21 * a33 - a23 * a31,
-        b11 = a22 * a33 - a23 * a32,
-
-        // Calculate the determinant
-        det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-
-    if (!det) { 
-        return null; 
-    }
-    det = 1.0 / det;
-
-    out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
-    out[1] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
-    out[2] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
-
-    out[3] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
-    out[4] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
-    out[5] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
-
-    out[6] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
-    out[7] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
-    out[8] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
-
-    return out;
-};
-
-/**
- * Returns a string representation of a mat3
- *
- * @param {mat3} mat matrix to represent as a string
- * @returns {String} string representation of the matrix
- */
-mat3.str = function (a) {
-    return 'mat3(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + 
-                    a[3] + ', ' + a[4] + ', ' + a[5] + ', ' + 
-                    a[6] + ', ' + a[7] + ', ' + a[8] + ')';
-};
-
-/**
- * Returns Frobenius norm of a mat3
- *
- * @param {mat3} a the matrix to calculate Frobenius norm of
- * @returns {Number} Frobenius norm
- */
-mat3.frob = function (a) {
-    return(Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2) + Math.pow(a[4], 2) + Math.pow(a[5], 2) + Math.pow(a[6], 2) + Math.pow(a[7], 2) + Math.pow(a[8], 2)))
-};
-
-/**
- * Adds two mat3's
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the first operand
- * @param {mat3} b the second operand
- * @returns {mat3} out
- */
-mat3.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    out[2] = a[2] + b[2];
-    out[3] = a[3] + b[3];
-    out[4] = a[4] + b[4];
-    out[5] = a[5] + b[5];
-    out[6] = a[6] + b[6];
-    out[7] = a[7] + b[7];
-    out[8] = a[8] + b[8];
-    return out;
-};
-
-/**
- * Subtracts matrix b from matrix a
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the first operand
- * @param {mat3} b the second operand
- * @returns {mat3} out
- */
-mat3.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
-    out[3] = a[3] - b[3];
-    out[4] = a[4] - b[4];
-    out[5] = a[5] - b[5];
-    out[6] = a[6] - b[6];
-    out[7] = a[7] - b[7];
-    out[8] = a[8] - b[8];
-    return out;
-};
-
-/**
- * Alias for {@link mat3.subtract}
+ * Alias for {@link mat2d.subtract}
  * @function
  */
-mat3.sub = mat3.subtract;
+var sub = exports.sub = subtract;
+
+/***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.sub = exports.mul = undefined;
+exports.create = create;
+exports.clone = clone;
+exports.copy = copy;
+exports.fromValues = fromValues;
+exports.set = set;
+exports.identity = identity;
+exports.transpose = transpose;
+exports.invert = invert;
+exports.adjoint = adjoint;
+exports.determinant = determinant;
+exports.multiply = multiply;
+exports.translate = translate;
+exports.scale = scale;
+exports.rotate = rotate;
+exports.rotateX = rotateX;
+exports.rotateY = rotateY;
+exports.rotateZ = rotateZ;
+exports.fromTranslation = fromTranslation;
+exports.fromScaling = fromScaling;
+exports.fromRotation = fromRotation;
+exports.fromXRotation = fromXRotation;
+exports.fromYRotation = fromYRotation;
+exports.fromZRotation = fromZRotation;
+exports.fromRotationTranslation = fromRotationTranslation;
+exports.getTranslation = getTranslation;
+exports.getScaling = getScaling;
+exports.getRotation = getRotation;
+exports.fromRotationTranslationScale = fromRotationTranslationScale;
+exports.fromRotationTranslationScaleOrigin = fromRotationTranslationScaleOrigin;
+exports.fromQuat = fromQuat;
+exports.frustum = frustum;
+exports.perspective = perspective;
+exports.perspectiveFromFieldOfView = perspectiveFromFieldOfView;
+exports.ortho = ortho;
+exports.lookAt = lookAt;
+exports.targetTo = targetTo;
+exports.str = str;
+exports.frob = frob;
+exports.add = add;
+exports.subtract = subtract;
+exports.multiplyScalar = multiplyScalar;
+exports.multiplyScalarAndAdd = multiplyScalarAndAdd;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 /**
- * Multiply each element of the matrix by a scalar.
- *
- * @param {mat3} out the receiving matrix
- * @param {mat3} a the matrix to scale
- * @param {Number} b amount to scale the matrix's elements by
- * @returns {mat3} out
+ * 4x4 Matrix
+ * @module mat4
  */
-mat3.multiplyScalar = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    out[2] = a[2] * b;
-    out[3] = a[3] * b;
-    out[4] = a[4] * b;
-    out[5] = a[5] * b;
-    out[6] = a[6] * b;
-    out[7] = a[7] * b;
-    out[8] = a[8] * b;
-    return out;
-};
-
-/**
- * Adds two mat3's after multiplying each element of the second operand by a scalar value.
- *
- * @param {mat3} out the receiving vector
- * @param {mat3} a the first operand
- * @param {mat3} b the second operand
- * @param {Number} scale the amount to scale b's elements by before adding
- * @returns {mat3} out
- */
-mat3.multiplyScalarAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    out[2] = a[2] + (b[2] * scale);
-    out[3] = a[3] + (b[3] * scale);
-    out[4] = a[4] + (b[4] * scale);
-    out[5] = a[5] + (b[5] * scale);
-    out[6] = a[6] + (b[6] * scale);
-    out[7] = a[7] + (b[7] * scale);
-    out[8] = a[8] + (b[8] * scale);
-    return out;
-};
-
-/*
- * Returns whether or not the matrices have exactly the same elements in the same position (when compared with ===)
- *
- * @param {mat3} a The first matrix.
- * @param {mat3} b The second matrix.
- * @returns {Boolean} True if the matrices are equal, false otherwise.
- */
-mat3.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && 
-           a[3] === b[3] && a[4] === b[4] && a[5] === b[5] &&
-           a[6] === b[6] && a[7] === b[7] && a[8] === b[8];
-};
-
-/**
- * Returns whether or not the matrices have approximately the same elements in the same position.
- *
- * @param {mat3} a The first matrix.
- * @param {mat3} b The second matrix.
- * @returns {Boolean} True if the matrices are equal, false otherwise.
- */
-mat3.equals = function (a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5], a6 = a[6], a7 = a[7], a8 = a[8];
-    var b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3], b4 = b[4], b5 = b[5], b6 = a[6], b7 = b[7], b8 = b[8];
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)) &&
-            Math.abs(a2 - b2) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a2), Math.abs(b2)) &&
-            Math.abs(a3 - b3) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a3), Math.abs(b3)) &&
-            Math.abs(a4 - b4) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a4), Math.abs(b4)) &&
-            Math.abs(a5 - b5) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a5), Math.abs(b5)) &&
-            Math.abs(a6 - b6) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a6), Math.abs(b6)) &&
-            Math.abs(a7 - b7) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a7), Math.abs(b7)) &&
-            Math.abs(a8 - b8) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a8), Math.abs(b8)));
-};
-
-
-module.exports = mat3;
-
-},{"./common.js":26}],30:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
-
-var glMatrix = require("./common.js");
-
-/**
- * @class 4x4 Matrix
- * @name mat4
- */
-var mat4 = {
-  scalar: {},
-  SIMD: {},
-};
 
 /**
  * Creates a new identity mat4
  *
  * @returns {mat4} a new 4x4 matrix
  */
-mat4.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(16);
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = 1;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = 1;
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
-};
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(16);
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = 1;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 1;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
+}
 
 /**
  * Creates a new mat4 initialized with values from an existing matrix
@@ -15584,26 +17537,46 @@ mat4.create = function() {
  * @param {mat4} a matrix to clone
  * @returns {mat4} a new 4x4 matrix
  */
-mat4.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(16);
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    out[4] = a[4];
-    out[5] = a[5];
-    out[6] = a[6];
-    out[7] = a[7];
-    out[8] = a[8];
-    out[9] = a[9];
-    out[10] = a[10];
-    out[11] = a[11];
-    out[12] = a[12];
-    out[13] = a[13];
-    out[14] = a[14];
-    out[15] = a[15];
-    return out;
-};
+/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. */
+
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(16);
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  out[4] = a[4];
+  out[5] = a[5];
+  out[6] = a[6];
+  out[7] = a[7];
+  out[8] = a[8];
+  out[9] = a[9];
+  out[10] = a[10];
+  out[11] = a[11];
+  out[12] = a[12];
+  out[13] = a[13];
+  out[14] = a[14];
+  out[15] = a[15];
+  return out;
+}
 
 /**
  * Copy the values from one mat4 to another
@@ -15612,25 +17585,25 @@ mat4.clone = function(a) {
  * @param {mat4} a the source matrix
  * @returns {mat4} out
  */
-mat4.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    out[4] = a[4];
-    out[5] = a[5];
-    out[6] = a[6];
-    out[7] = a[7];
-    out[8] = a[8];
-    out[9] = a[9];
-    out[10] = a[10];
-    out[11] = a[11];
-    out[12] = a[12];
-    out[13] = a[13];
-    out[14] = a[14];
-    out[15] = a[15];
-    return out;
-};
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  out[2] = a[2];
+  out[3] = a[3];
+  out[4] = a[4];
+  out[5] = a[5];
+  out[6] = a[6];
+  out[7] = a[7];
+  out[8] = a[8];
+  out[9] = a[9];
+  out[10] = a[10];
+  out[11] = a[11];
+  out[12] = a[12];
+  out[13] = a[13];
+  out[14] = a[14];
+  out[15] = a[15];
+  return out;
+}
 
 /**
  * Create a new mat4 with the given values
@@ -15653,26 +17626,26 @@ mat4.copy = function(out, a) {
  * @param {Number} m33 Component in column 3, row 3 position (index 15)
  * @returns {mat4} A new mat4
  */
-mat4.fromValues = function(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
-    var out = new glMatrix.ARRAY_TYPE(16);
-    out[0] = m00;
-    out[1] = m01;
-    out[2] = m02;
-    out[3] = m03;
-    out[4] = m10;
-    out[5] = m11;
-    out[6] = m12;
-    out[7] = m13;
-    out[8] = m20;
-    out[9] = m21;
-    out[10] = m22;
-    out[11] = m23;
-    out[12] = m30;
-    out[13] = m31;
-    out[14] = m32;
-    out[15] = m33;
-    return out;
-};
+function fromValues(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
+  var out = new glMatrix.ARRAY_TYPE(16);
+  out[0] = m00;
+  out[1] = m01;
+  out[2] = m02;
+  out[3] = m03;
+  out[4] = m10;
+  out[5] = m11;
+  out[6] = m12;
+  out[7] = m13;
+  out[8] = m20;
+  out[9] = m21;
+  out[10] = m22;
+  out[11] = m23;
+  out[12] = m30;
+  out[13] = m31;
+  out[14] = m32;
+  out[15] = m33;
+  return out;
+}
 
 /**
  * Set the components of a mat4 to the given values
@@ -15696,26 +17669,25 @@ mat4.fromValues = function(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22
  * @param {Number} m33 Component in column 3, row 3 position (index 15)
  * @returns {mat4} out
  */
-mat4.set = function(out, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
-    out[0] = m00;
-    out[1] = m01;
-    out[2] = m02;
-    out[3] = m03;
-    out[4] = m10;
-    out[5] = m11;
-    out[6] = m12;
-    out[7] = m13;
-    out[8] = m20;
-    out[9] = m21;
-    out[10] = m22;
-    out[11] = m23;
-    out[12] = m30;
-    out[13] = m31;
-    out[14] = m32;
-    out[15] = m33;
-    return out;
-};
-
+function set(out, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
+  out[0] = m00;
+  out[1] = m01;
+  out[2] = m02;
+  out[3] = m03;
+  out[4] = m10;
+  out[5] = m11;
+  out[6] = m12;
+  out[7] = m13;
+  out[8] = m20;
+  out[9] = m21;
+  out[10] = m22;
+  out[11] = m23;
+  out[12] = m30;
+  out[13] = m31;
+  out[14] = m32;
+  out[15] = m33;
+  return out;
+}
 
 /**
  * Set a mat4 to the identity matrix
@@ -15723,408 +17695,186 @@ mat4.set = function(out, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, 
  * @param {mat4} out the receiving matrix
  * @returns {mat4} out
  */
-mat4.identity = function(out) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = 1;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = 1;
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
-};
-
-/**
- * Transpose the values of a mat4 not using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.scalar.transpose = function(out, a) {
-    // If we are transposing ourselves we can skip a few steps but have to cache some values
-    if (out === a) {
-        var a01 = a[1], a02 = a[2], a03 = a[3],
-            a12 = a[6], a13 = a[7],
-            a23 = a[11];
-
-        out[1] = a[4];
-        out[2] = a[8];
-        out[3] = a[12];
-        out[4] = a01;
-        out[6] = a[9];
-        out[7] = a[13];
-        out[8] = a02;
-        out[9] = a12;
-        out[11] = a[14];
-        out[12] = a03;
-        out[13] = a13;
-        out[14] = a23;
-    } else {
-        out[0] = a[0];
-        out[1] = a[4];
-        out[2] = a[8];
-        out[3] = a[12];
-        out[4] = a[1];
-        out[5] = a[5];
-        out[6] = a[9];
-        out[7] = a[13];
-        out[8] = a[2];
-        out[9] = a[6];
-        out[10] = a[10];
-        out[11] = a[14];
-        out[12] = a[3];
-        out[13] = a[7];
-        out[14] = a[11];
-        out[15] = a[15];
-    }
-
-    return out;
-};
-
-/**
- * Transpose the values of a mat4 using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.SIMD.transpose = function(out, a) {
-    var a0, a1, a2, a3,
-        tmp01, tmp23,
-        out0, out1, out2, out3;
-
-    a0 = SIMD.Float32x4.load(a, 0);
-    a1 = SIMD.Float32x4.load(a, 4);
-    a2 = SIMD.Float32x4.load(a, 8);
-    a3 = SIMD.Float32x4.load(a, 12);
-
-    tmp01 = SIMD.Float32x4.shuffle(a0, a1, 0, 1, 4, 5);
-    tmp23 = SIMD.Float32x4.shuffle(a2, a3, 0, 1, 4, 5);
-    out0  = SIMD.Float32x4.shuffle(tmp01, tmp23, 0, 2, 4, 6);
-    out1  = SIMD.Float32x4.shuffle(tmp01, tmp23, 1, 3, 5, 7);
-    SIMD.Float32x4.store(out, 0,  out0);
-    SIMD.Float32x4.store(out, 4,  out1);
-
-    tmp01 = SIMD.Float32x4.shuffle(a0, a1, 2, 3, 6, 7);
-    tmp23 = SIMD.Float32x4.shuffle(a2, a3, 2, 3, 6, 7);
-    out2  = SIMD.Float32x4.shuffle(tmp01, tmp23, 0, 2, 4, 6);
-    out3  = SIMD.Float32x4.shuffle(tmp01, tmp23, 1, 3, 5, 7);
-    SIMD.Float32x4.store(out, 8,  out2);
-    SIMD.Float32x4.store(out, 12, out3);
-
-    return out;
-};
-
-/**
- * Transpse a mat4 using SIMD if available and enabled
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.transpose = glMatrix.USE_SIMD ? mat4.SIMD.transpose : mat4.scalar.transpose;
-
-/**
- * Inverts a mat4 not using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.scalar.invert = function(out, a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
-
-        b00 = a00 * a11 - a01 * a10,
-        b01 = a00 * a12 - a02 * a10,
-        b02 = a00 * a13 - a03 * a10,
-        b03 = a01 * a12 - a02 * a11,
-        b04 = a01 * a13 - a03 * a11,
-        b05 = a02 * a13 - a03 * a12,
-        b06 = a20 * a31 - a21 * a30,
-        b07 = a20 * a32 - a22 * a30,
-        b08 = a20 * a33 - a23 * a30,
-        b09 = a21 * a32 - a22 * a31,
-        b10 = a21 * a33 - a23 * a31,
-        b11 = a22 * a33 - a23 * a32,
-
-        // Calculate the determinant
-        det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-
-    if (!det) {
-        return null;
-    }
-    det = 1.0 / det;
-
-    out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
-    out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
-    out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
-    out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
-    out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
-    out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
-    out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
-    out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
-    out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
-    out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
-    out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
-    out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
-    out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det;
-    out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
-    out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det;
-    out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
-
-    return out;
-};
-
-/**
- * Inverts a mat4 using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.SIMD.invert = function(out, a) {
-  var row0, row1, row2, row3,
-      tmp1,
-      minor0, minor1, minor2, minor3,
-      det,
-      a0 = SIMD.Float32x4.load(a, 0),
-      a1 = SIMD.Float32x4.load(a, 4),
-      a2 = SIMD.Float32x4.load(a, 8),
-      a3 = SIMD.Float32x4.load(a, 12);
-
-  // Compute matrix adjugate
-  tmp1 = SIMD.Float32x4.shuffle(a0, a1, 0, 1, 4, 5);
-  row1 = SIMD.Float32x4.shuffle(a2, a3, 0, 1, 4, 5);
-  row0 = SIMD.Float32x4.shuffle(tmp1, row1, 0, 2, 4, 6);
-  row1 = SIMD.Float32x4.shuffle(row1, tmp1, 1, 3, 5, 7);
-  tmp1 = SIMD.Float32x4.shuffle(a0, a1, 2, 3, 6, 7);
-  row3 = SIMD.Float32x4.shuffle(a2, a3, 2, 3, 6, 7);
-  row2 = SIMD.Float32x4.shuffle(tmp1, row3, 0, 2, 4, 6);
-  row3 = SIMD.Float32x4.shuffle(row3, tmp1, 1, 3, 5, 7);
-
-  tmp1   = SIMD.Float32x4.mul(row2, row3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor0 = SIMD.Float32x4.mul(row1, tmp1);
-  minor1 = SIMD.Float32x4.mul(row0, tmp1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row1, tmp1), minor0);
-  minor1 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row0, tmp1), minor1);
-  minor1 = SIMD.Float32x4.swizzle(minor1, 2, 3, 0, 1);
-
-  tmp1   = SIMD.Float32x4.mul(row1, row2);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor0 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row3, tmp1), minor0);
-  minor3 = SIMD.Float32x4.mul(row0, tmp1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.sub(minor0, SIMD.Float32x4.mul(row3, tmp1));
-  minor3 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row0, tmp1), minor3);
-  minor3 = SIMD.Float32x4.swizzle(minor3, 2, 3, 0, 1);
-
-  tmp1   = SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(row1, 2, 3, 0, 1), row3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  row2   = SIMD.Float32x4.swizzle(row2, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row2, tmp1), minor0);
-  minor2 = SIMD.Float32x4.mul(row0, tmp1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.sub(minor0, SIMD.Float32x4.mul(row2, tmp1));
-  minor2 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row0, tmp1), minor2);
-  minor2 = SIMD.Float32x4.swizzle(minor2, 2, 3, 0, 1);
-
-  tmp1   = SIMD.Float32x4.mul(row0, row1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor2 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row3, tmp1), minor2);
-  minor3 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row2, tmp1), minor3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor2 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row3, tmp1), minor2);
-  minor3 = SIMD.Float32x4.sub(minor3, SIMD.Float32x4.mul(row2, tmp1));
-
-  tmp1   = SIMD.Float32x4.mul(row0, row3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor1 = SIMD.Float32x4.sub(minor1, SIMD.Float32x4.mul(row2, tmp1));
-  minor2 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row1, tmp1), minor2);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor1 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row2, tmp1), minor1);
-  minor2 = SIMD.Float32x4.sub(minor2, SIMD.Float32x4.mul(row1, tmp1));
-
-  tmp1   = SIMD.Float32x4.mul(row0, row2);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor1 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row3, tmp1), minor1);
-  minor3 = SIMD.Float32x4.sub(minor3, SIMD.Float32x4.mul(row1, tmp1));
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor1 = SIMD.Float32x4.sub(minor1, SIMD.Float32x4.mul(row3, tmp1));
-  minor3 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row1, tmp1), minor3);
-
-  // Compute matrix determinant
-  det   = SIMD.Float32x4.mul(row0, minor0);
-  det   = SIMD.Float32x4.add(SIMD.Float32x4.swizzle(det, 2, 3, 0, 1), det);
-  det   = SIMD.Float32x4.add(SIMD.Float32x4.swizzle(det, 1, 0, 3, 2), det);
-  tmp1  = SIMD.Float32x4.reciprocalApproximation(det);
-  det   = SIMD.Float32x4.sub(
-               SIMD.Float32x4.add(tmp1, tmp1),
-               SIMD.Float32x4.mul(det, SIMD.Float32x4.mul(tmp1, tmp1)));
-  det   = SIMD.Float32x4.swizzle(det, 0, 0, 0, 0);
-  if (!det) {
-      return null;
-  }
-
-  // Compute matrix inverse
-  SIMD.Float32x4.store(out, 0,  SIMD.Float32x4.mul(det, minor0));
-  SIMD.Float32x4.store(out, 4,  SIMD.Float32x4.mul(det, minor1));
-  SIMD.Float32x4.store(out, 8,  SIMD.Float32x4.mul(det, minor2));
-  SIMD.Float32x4.store(out, 12, SIMD.Float32x4.mul(det, minor3));
+function identity(out) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = 1;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 1;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
   return out;
 }
 
 /**
- * Inverts a mat4 using SIMD if available and enabled
+ * Transpose the values of a mat4
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the source matrix
  * @returns {mat4} out
  */
-mat4.invert = glMatrix.USE_SIMD ? mat4.SIMD.invert : mat4.scalar.invert;
+function transpose(out, a) {
+  // If we are transposing ourselves we can skip a few steps but have to cache some values
+  if (out === a) {
+    var a01 = a[1],
+        a02 = a[2],
+        a03 = a[3];
+    var a12 = a[6],
+        a13 = a[7];
+    var a23 = a[11];
 
-/**
- * Calculates the adjugate of a mat4 not using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.scalar.adjoint = function(out, a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+    out[1] = a[4];
+    out[2] = a[8];
+    out[3] = a[12];
+    out[4] = a01;
+    out[6] = a[9];
+    out[7] = a[13];
+    out[8] = a02;
+    out[9] = a12;
+    out[11] = a[14];
+    out[12] = a03;
+    out[13] = a13;
+    out[14] = a23;
+  } else {
+    out[0] = a[0];
+    out[1] = a[4];
+    out[2] = a[8];
+    out[3] = a[12];
+    out[4] = a[1];
+    out[5] = a[5];
+    out[6] = a[9];
+    out[7] = a[13];
+    out[8] = a[2];
+    out[9] = a[6];
+    out[10] = a[10];
+    out[11] = a[14];
+    out[12] = a[3];
+    out[13] = a[7];
+    out[14] = a[11];
+    out[15] = a[15];
+  }
 
-    out[0]  =  (a11 * (a22 * a33 - a23 * a32) - a21 * (a12 * a33 - a13 * a32) + a31 * (a12 * a23 - a13 * a22));
-    out[1]  = -(a01 * (a22 * a33 - a23 * a32) - a21 * (a02 * a33 - a03 * a32) + a31 * (a02 * a23 - a03 * a22));
-    out[2]  =  (a01 * (a12 * a33 - a13 * a32) - a11 * (a02 * a33 - a03 * a32) + a31 * (a02 * a13 - a03 * a12));
-    out[3]  = -(a01 * (a12 * a23 - a13 * a22) - a11 * (a02 * a23 - a03 * a22) + a21 * (a02 * a13 - a03 * a12));
-    out[4]  = -(a10 * (a22 * a33 - a23 * a32) - a20 * (a12 * a33 - a13 * a32) + a30 * (a12 * a23 - a13 * a22));
-    out[5]  =  (a00 * (a22 * a33 - a23 * a32) - a20 * (a02 * a33 - a03 * a32) + a30 * (a02 * a23 - a03 * a22));
-    out[6]  = -(a00 * (a12 * a33 - a13 * a32) - a10 * (a02 * a33 - a03 * a32) + a30 * (a02 * a13 - a03 * a12));
-    out[7]  =  (a00 * (a12 * a23 - a13 * a22) - a10 * (a02 * a23 - a03 * a22) + a20 * (a02 * a13 - a03 * a12));
-    out[8]  =  (a10 * (a21 * a33 - a23 * a31) - a20 * (a11 * a33 - a13 * a31) + a30 * (a11 * a23 - a13 * a21));
-    out[9]  = -(a00 * (a21 * a33 - a23 * a31) - a20 * (a01 * a33 - a03 * a31) + a30 * (a01 * a23 - a03 * a21));
-    out[10] =  (a00 * (a11 * a33 - a13 * a31) - a10 * (a01 * a33 - a03 * a31) + a30 * (a01 * a13 - a03 * a11));
-    out[11] = -(a00 * (a11 * a23 - a13 * a21) - a10 * (a01 * a23 - a03 * a21) + a20 * (a01 * a13 - a03 * a11));
-    out[12] = -(a10 * (a21 * a32 - a22 * a31) - a20 * (a11 * a32 - a12 * a31) + a30 * (a11 * a22 - a12 * a21));
-    out[13] =  (a00 * (a21 * a32 - a22 * a31) - a20 * (a01 * a32 - a02 * a31) + a30 * (a01 * a22 - a02 * a21));
-    out[14] = -(a00 * (a11 * a32 - a12 * a31) - a10 * (a01 * a32 - a02 * a31) + a30 * (a01 * a12 - a02 * a11));
-    out[15] =  (a00 * (a11 * a22 - a12 * a21) - a10 * (a01 * a22 - a02 * a21) + a20 * (a01 * a12 - a02 * a11));
-    return out;
-};
-
-/**
- * Calculates the adjugate of a mat4 using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the source matrix
- * @returns {mat4} out
- */
-mat4.SIMD.adjoint = function(out, a) {
-  var a0, a1, a2, a3;
-  var row0, row1, row2, row3;
-  var tmp1;
-  var minor0, minor1, minor2, minor3;
-
-  var a0 = SIMD.Float32x4.load(a, 0);
-  var a1 = SIMD.Float32x4.load(a, 4);
-  var a2 = SIMD.Float32x4.load(a, 8);
-  var a3 = SIMD.Float32x4.load(a, 12);
-
-  // Transpose the source matrix.  Sort of.  Not a true transpose operation
-  tmp1 = SIMD.Float32x4.shuffle(a0, a1, 0, 1, 4, 5);
-  row1 = SIMD.Float32x4.shuffle(a2, a3, 0, 1, 4, 5);
-  row0 = SIMD.Float32x4.shuffle(tmp1, row1, 0, 2, 4, 6);
-  row1 = SIMD.Float32x4.shuffle(row1, tmp1, 1, 3, 5, 7);
-
-  tmp1 = SIMD.Float32x4.shuffle(a0, a1, 2, 3, 6, 7);
-  row3 = SIMD.Float32x4.shuffle(a2, a3, 2, 3, 6, 7);
-  row2 = SIMD.Float32x4.shuffle(tmp1, row3, 0, 2, 4, 6);
-  row3 = SIMD.Float32x4.shuffle(row3, tmp1, 1, 3, 5, 7);
-
-  tmp1   = SIMD.Float32x4.mul(row2, row3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor0 = SIMD.Float32x4.mul(row1, tmp1);
-  minor1 = SIMD.Float32x4.mul(row0, tmp1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row1, tmp1), minor0);
-  minor1 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row0, tmp1), minor1);
-  minor1 = SIMD.Float32x4.swizzle(minor1, 2, 3, 0, 1);
-
-  tmp1   = SIMD.Float32x4.mul(row1, row2);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor0 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row3, tmp1), minor0);
-  minor3 = SIMD.Float32x4.mul(row0, tmp1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.sub(minor0, SIMD.Float32x4.mul(row3, tmp1));
-  minor3 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row0, tmp1), minor3);
-  minor3 = SIMD.Float32x4.swizzle(minor3, 2, 3, 0, 1);
-
-  tmp1   = SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(row1, 2, 3, 0, 1), row3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  row2   = SIMD.Float32x4.swizzle(row2, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row2, tmp1), minor0);
-  minor2 = SIMD.Float32x4.mul(row0, tmp1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor0 = SIMD.Float32x4.sub(minor0, SIMD.Float32x4.mul(row2, tmp1));
-  minor2 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row0, tmp1), minor2);
-  minor2 = SIMD.Float32x4.swizzle(minor2, 2, 3, 0, 1);
-
-  tmp1   = SIMD.Float32x4.mul(row0, row1);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor2 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row3, tmp1), minor2);
-  minor3 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row2, tmp1), minor3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor2 = SIMD.Float32x4.sub(SIMD.Float32x4.mul(row3, tmp1), minor2);
-  minor3 = SIMD.Float32x4.sub(minor3, SIMD.Float32x4.mul(row2, tmp1));
-
-  tmp1   = SIMD.Float32x4.mul(row0, row3);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor1 = SIMD.Float32x4.sub(minor1, SIMD.Float32x4.mul(row2, tmp1));
-  minor2 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row1, tmp1), minor2);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor1 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row2, tmp1), minor1);
-  minor2 = SIMD.Float32x4.sub(minor2, SIMD.Float32x4.mul(row1, tmp1));
-
-  tmp1   = SIMD.Float32x4.mul(row0, row2);
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 1, 0, 3, 2);
-  minor1 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row3, tmp1), minor1);
-  minor3 = SIMD.Float32x4.sub(minor3, SIMD.Float32x4.mul(row1, tmp1));
-  tmp1   = SIMD.Float32x4.swizzle(tmp1, 2, 3, 0, 1);
-  minor1 = SIMD.Float32x4.sub(minor1, SIMD.Float32x4.mul(row3, tmp1));
-  minor3 = SIMD.Float32x4.add(SIMD.Float32x4.mul(row1, tmp1), minor3);
-
-  SIMD.Float32x4.store(out, 0,  minor0);
-  SIMD.Float32x4.store(out, 4,  minor1);
-  SIMD.Float32x4.store(out, 8,  minor2);
-  SIMD.Float32x4.store(out, 12, minor3);
   return out;
-};
+}
 
 /**
- * Calculates the adjugate of a mat4 using SIMD if available and enabled
+ * Inverts a mat4
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the source matrix
  * @returns {mat4} out
  */
- mat4.adjoint = glMatrix.USE_SIMD ? mat4.SIMD.adjoint : mat4.scalar.adjoint;
+function invert(out, a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a03 = a[3];
+  var a10 = a[4],
+      a11 = a[5],
+      a12 = a[6],
+      a13 = a[7];
+  var a20 = a[8],
+      a21 = a[9],
+      a22 = a[10],
+      a23 = a[11];
+  var a30 = a[12],
+      a31 = a[13],
+      a32 = a[14],
+      a33 = a[15];
+
+  var b00 = a00 * a11 - a01 * a10;
+  var b01 = a00 * a12 - a02 * a10;
+  var b02 = a00 * a13 - a03 * a10;
+  var b03 = a01 * a12 - a02 * a11;
+  var b04 = a01 * a13 - a03 * a11;
+  var b05 = a02 * a13 - a03 * a12;
+  var b06 = a20 * a31 - a21 * a30;
+  var b07 = a20 * a32 - a22 * a30;
+  var b08 = a20 * a33 - a23 * a30;
+  var b09 = a21 * a32 - a22 * a31;
+  var b10 = a21 * a33 - a23 * a31;
+  var b11 = a22 * a33 - a23 * a32;
+
+  // Calculate the determinant
+  var det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+
+  if (!det) {
+    return null;
+  }
+  det = 1.0 / det;
+
+  out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
+  out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+  out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
+  out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+  out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
+  out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+  out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
+  out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+  out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
+  out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+  out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
+  out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+  out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det;
+  out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
+  out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det;
+  out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+
+  return out;
+}
+
+/**
+ * Calculates the adjugate of a mat4
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the source matrix
+ * @returns {mat4} out
+ */
+function adjoint(out, a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a03 = a[3];
+  var a10 = a[4],
+      a11 = a[5],
+      a12 = a[6],
+      a13 = a[7];
+  var a20 = a[8],
+      a21 = a[9],
+      a22 = a[10],
+      a23 = a[11];
+  var a30 = a[12],
+      a31 = a[13],
+      a32 = a[14],
+      a33 = a[15];
+
+  out[0] = a11 * (a22 * a33 - a23 * a32) - a21 * (a12 * a33 - a13 * a32) + a31 * (a12 * a23 - a13 * a22);
+  out[1] = -(a01 * (a22 * a33 - a23 * a32) - a21 * (a02 * a33 - a03 * a32) + a31 * (a02 * a23 - a03 * a22));
+  out[2] = a01 * (a12 * a33 - a13 * a32) - a11 * (a02 * a33 - a03 * a32) + a31 * (a02 * a13 - a03 * a12);
+  out[3] = -(a01 * (a12 * a23 - a13 * a22) - a11 * (a02 * a23 - a03 * a22) + a21 * (a02 * a13 - a03 * a12));
+  out[4] = -(a10 * (a22 * a33 - a23 * a32) - a20 * (a12 * a33 - a13 * a32) + a30 * (a12 * a23 - a13 * a22));
+  out[5] = a00 * (a22 * a33 - a23 * a32) - a20 * (a02 * a33 - a03 * a32) + a30 * (a02 * a23 - a03 * a22);
+  out[6] = -(a00 * (a12 * a33 - a13 * a32) - a10 * (a02 * a33 - a03 * a32) + a30 * (a02 * a13 - a03 * a12));
+  out[7] = a00 * (a12 * a23 - a13 * a22) - a10 * (a02 * a23 - a03 * a22) + a20 * (a02 * a13 - a03 * a12);
+  out[8] = a10 * (a21 * a33 - a23 * a31) - a20 * (a11 * a33 - a13 * a31) + a30 * (a11 * a23 - a13 * a21);
+  out[9] = -(a00 * (a21 * a33 - a23 * a31) - a20 * (a01 * a33 - a03 * a31) + a30 * (a01 * a23 - a03 * a21));
+  out[10] = a00 * (a11 * a33 - a13 * a31) - a10 * (a01 * a33 - a03 * a31) + a30 * (a01 * a13 - a03 * a11);
+  out[11] = -(a00 * (a11 * a23 - a13 * a21) - a10 * (a01 * a23 - a03 * a21) + a20 * (a01 * a13 - a03 * a11));
+  out[12] = -(a10 * (a21 * a32 - a22 * a31) - a20 * (a11 * a32 - a12 * a31) + a30 * (a11 * a22 - a12 * a21));
+  out[13] = a00 * (a21 * a32 - a22 * a31) - a20 * (a01 * a32 - a02 * a31) + a30 * (a01 * a22 - a02 * a21);
+  out[14] = -(a00 * (a11 * a32 - a12 * a31) - a10 * (a01 * a32 - a02 * a31) + a30 * (a01 * a12 - a02 * a11));
+  out[15] = a00 * (a11 * a22 - a12 * a21) - a10 * (a01 * a22 - a02 * a21) + a20 * (a01 * a12 - a02 * a11);
+  return out;
+}
 
 /**
  * Calculates the determinant of a mat4
@@ -16132,220 +17882,144 @@ mat4.SIMD.adjoint = function(out, a) {
  * @param {mat4} a the source matrix
  * @returns {Number} determinant of a
  */
-mat4.determinant = function (a) {
-    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
+function determinant(a) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a03 = a[3];
+  var a10 = a[4],
+      a11 = a[5],
+      a12 = a[6],
+      a13 = a[7];
+  var a20 = a[8],
+      a21 = a[9],
+      a22 = a[10],
+      a23 = a[11];
+  var a30 = a[12],
+      a31 = a[13],
+      a32 = a[14],
+      a33 = a[15];
 
-        b00 = a00 * a11 - a01 * a10,
-        b01 = a00 * a12 - a02 * a10,
-        b02 = a00 * a13 - a03 * a10,
-        b03 = a01 * a12 - a02 * a11,
-        b04 = a01 * a13 - a03 * a11,
-        b05 = a02 * a13 - a03 * a12,
-        b06 = a20 * a31 - a21 * a30,
-        b07 = a20 * a32 - a22 * a30,
-        b08 = a20 * a33 - a23 * a30,
-        b09 = a21 * a32 - a22 * a31,
-        b10 = a21 * a33 - a23 * a31,
-        b11 = a22 * a33 - a23 * a32;
+  var b00 = a00 * a11 - a01 * a10;
+  var b01 = a00 * a12 - a02 * a10;
+  var b02 = a00 * a13 - a03 * a10;
+  var b03 = a01 * a12 - a02 * a11;
+  var b04 = a01 * a13 - a03 * a11;
+  var b05 = a02 * a13 - a03 * a12;
+  var b06 = a20 * a31 - a21 * a30;
+  var b07 = a20 * a32 - a22 * a30;
+  var b08 = a20 * a33 - a23 * a30;
+  var b09 = a21 * a32 - a22 * a31;
+  var b10 = a21 * a33 - a23 * a31;
+  var b11 = a22 * a33 - a23 * a32;
 
-    // Calculate the determinant
-    return b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-};
-
-/**
- * Multiplies two mat4's explicitly using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the first operand, must be a Float32Array
- * @param {mat4} b the second operand, must be a Float32Array
- * @returns {mat4} out
- */
-mat4.SIMD.multiply = function (out, a, b) {
-    var a0 = SIMD.Float32x4.load(a, 0);
-    var a1 = SIMD.Float32x4.load(a, 4);
-    var a2 = SIMD.Float32x4.load(a, 8);
-    var a3 = SIMD.Float32x4.load(a, 12);
-
-    var b0 = SIMD.Float32x4.load(b, 0);
-    var out0 = SIMD.Float32x4.add(
-                   SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b0, 0, 0, 0, 0), a0),
-                   SIMD.Float32x4.add(
-                       SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b0, 1, 1, 1, 1), a1),
-                       SIMD.Float32x4.add(
-                           SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b0, 2, 2, 2, 2), a2),
-                           SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b0, 3, 3, 3, 3), a3))));
-    SIMD.Float32x4.store(out, 0, out0);
-
-    var b1 = SIMD.Float32x4.load(b, 4);
-    var out1 = SIMD.Float32x4.add(
-                   SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b1, 0, 0, 0, 0), a0),
-                   SIMD.Float32x4.add(
-                       SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b1, 1, 1, 1, 1), a1),
-                       SIMD.Float32x4.add(
-                           SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b1, 2, 2, 2, 2), a2),
-                           SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b1, 3, 3, 3, 3), a3))));
-    SIMD.Float32x4.store(out, 4, out1);
-
-    var b2 = SIMD.Float32x4.load(b, 8);
-    var out2 = SIMD.Float32x4.add(
-                   SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b2, 0, 0, 0, 0), a0),
-                   SIMD.Float32x4.add(
-                       SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b2, 1, 1, 1, 1), a1),
-                       SIMD.Float32x4.add(
-                               SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b2, 2, 2, 2, 2), a2),
-                               SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b2, 3, 3, 3, 3), a3))));
-    SIMD.Float32x4.store(out, 8, out2);
-
-    var b3 = SIMD.Float32x4.load(b, 12);
-    var out3 = SIMD.Float32x4.add(
-                   SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b3, 0, 0, 0, 0), a0),
-                   SIMD.Float32x4.add(
-                        SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b3, 1, 1, 1, 1), a1),
-                        SIMD.Float32x4.add(
-                            SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b3, 2, 2, 2, 2), a2),
-                            SIMD.Float32x4.mul(SIMD.Float32x4.swizzle(b3, 3, 3, 3, 3), a3))));
-    SIMD.Float32x4.store(out, 12, out3);
-
-    return out;
-};
+  // Calculate the determinant
+  return b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+}
 
 /**
- * Multiplies two mat4's explicitly not using SIMD
+ * Multiplies two mat4s
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the first operand
  * @param {mat4} b the second operand
  * @returns {mat4} out
  */
-mat4.scalar.multiply = function (out, a, b) {
-    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+function multiply(out, a, b) {
+  var a00 = a[0],
+      a01 = a[1],
+      a02 = a[2],
+      a03 = a[3];
+  var a10 = a[4],
+      a11 = a[5],
+      a12 = a[6],
+      a13 = a[7];
+  var a20 = a[8],
+      a21 = a[9],
+      a22 = a[10],
+      a23 = a[11];
+  var a30 = a[12],
+      a31 = a[13],
+      a32 = a[14],
+      a33 = a[15];
 
-    // Cache only the current line of the second matrix
-    var b0  = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
-    out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-    out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-    out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-    out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+  // Cache only the current line of the second matrix
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3];
+  out[0] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+  out[1] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+  out[2] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+  out[3] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
 
-    b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7];
-    out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-    out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-    out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-    out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+  b0 = b[4];b1 = b[5];b2 = b[6];b3 = b[7];
+  out[4] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+  out[5] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+  out[6] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+  out[7] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
 
-    b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11];
-    out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-    out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-    out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-    out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+  b0 = b[8];b1 = b[9];b2 = b[10];b3 = b[11];
+  out[8] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+  out[9] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+  out[10] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+  out[11] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
 
-    b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15];
-    out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-    out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-    out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-    out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-    return out;
-};
-
-/**
- * Multiplies two mat4's using SIMD if available and enabled
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the first operand
- * @param {mat4} b the second operand
- * @returns {mat4} out
- */
-mat4.multiply = glMatrix.USE_SIMD ? mat4.SIMD.multiply : mat4.scalar.multiply;
-
-/**
- * Alias for {@link mat4.multiply}
- * @function
- */
-mat4.mul = mat4.multiply;
-
-/**
- * Translate a mat4 by the given vector not using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to translate
- * @param {vec3} v vector to translate by
- * @returns {mat4} out
- */
-mat4.scalar.translate = function (out, a, v) {
-    var x = v[0], y = v[1], z = v[2],
-        a00, a01, a02, a03,
-        a10, a11, a12, a13,
-        a20, a21, a22, a23;
-
-    if (a === out) {
-        out[12] = a[0] * x + a[4] * y + a[8] * z + a[12];
-        out[13] = a[1] * x + a[5] * y + a[9] * z + a[13];
-        out[14] = a[2] * x + a[6] * y + a[10] * z + a[14];
-        out[15] = a[3] * x + a[7] * y + a[11] * z + a[15];
-    } else {
-        a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3];
-        a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7];
-        a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11];
-
-        out[0] = a00; out[1] = a01; out[2] = a02; out[3] = a03;
-        out[4] = a10; out[5] = a11; out[6] = a12; out[7] = a13;
-        out[8] = a20; out[9] = a21; out[10] = a22; out[11] = a23;
-
-        out[12] = a00 * x + a10 * y + a20 * z + a[12];
-        out[13] = a01 * x + a11 * y + a21 * z + a[13];
-        out[14] = a02 * x + a12 * y + a22 * z + a[14];
-        out[15] = a03 * x + a13 * y + a23 * z + a[15];
-    }
-
-    return out;
-};
+  b0 = b[12];b1 = b[13];b2 = b[14];b3 = b[15];
+  out[12] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+  out[13] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+  out[14] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+  out[15] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+  return out;
+}
 
 /**
- * Translates a mat4 by the given vector using SIMD
+ * Translate a mat4 by the given vector
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the matrix to translate
  * @param {vec3} v vector to translate by
  * @returns {mat4} out
  */
-mat4.SIMD.translate = function (out, a, v) {
-    var a0 = SIMD.Float32x4.load(a, 0),
-        a1 = SIMD.Float32x4.load(a, 4),
-        a2 = SIMD.Float32x4.load(a, 8),
-        a3 = SIMD.Float32x4.load(a, 12),
-        vec = SIMD.Float32x4(v[0], v[1], v[2] , 0);
+function translate(out, a, v) {
+  var x = v[0],
+      y = v[1],
+      z = v[2];
+  var a00 = void 0,
+      a01 = void 0,
+      a02 = void 0,
+      a03 = void 0;
+  var a10 = void 0,
+      a11 = void 0,
+      a12 = void 0,
+      a13 = void 0;
+  var a20 = void 0,
+      a21 = void 0,
+      a22 = void 0,
+      a23 = void 0;
 
-    if (a !== out) {
-        out[0] = a[0]; out[1] = a[1]; out[2] = a[2]; out[3] = a[3];
-        out[4] = a[4]; out[5] = a[5]; out[6] = a[6]; out[7] = a[7];
-        out[8] = a[8]; out[9] = a[9]; out[10] = a[10]; out[11] = a[11];
-    }
+  if (a === out) {
+    out[12] = a[0] * x + a[4] * y + a[8] * z + a[12];
+    out[13] = a[1] * x + a[5] * y + a[9] * z + a[13];
+    out[14] = a[2] * x + a[6] * y + a[10] * z + a[14];
+    out[15] = a[3] * x + a[7] * y + a[11] * z + a[15];
+  } else {
+    a00 = a[0];a01 = a[1];a02 = a[2];a03 = a[3];
+    a10 = a[4];a11 = a[5];a12 = a[6];a13 = a[7];
+    a20 = a[8];a21 = a[9];a22 = a[10];a23 = a[11];
 
-    a0 = SIMD.Float32x4.mul(a0, SIMD.Float32x4.swizzle(vec, 0, 0, 0, 0));
-    a1 = SIMD.Float32x4.mul(a1, SIMD.Float32x4.swizzle(vec, 1, 1, 1, 1));
-    a2 = SIMD.Float32x4.mul(a2, SIMD.Float32x4.swizzle(vec, 2, 2, 2, 2));
+    out[0] = a00;out[1] = a01;out[2] = a02;out[3] = a03;
+    out[4] = a10;out[5] = a11;out[6] = a12;out[7] = a13;
+    out[8] = a20;out[9] = a21;out[10] = a22;out[11] = a23;
 
-    var t0 = SIMD.Float32x4.add(a0, SIMD.Float32x4.add(a1, SIMD.Float32x4.add(a2, a3)));
-    SIMD.Float32x4.store(out, 12, t0);
+    out[12] = a00 * x + a10 * y + a20 * z + a[12];
+    out[13] = a01 * x + a11 * y + a21 * z + a[13];
+    out[14] = a02 * x + a12 * y + a22 * z + a[14];
+    out[15] = a03 * x + a13 * y + a23 * z + a[15];
+  }
 
-    return out;
-};
-
-/**
- * Translates a mat4 by the given vector using SIMD if available and enabled
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to translate
- * @param {vec3} v vector to translate by
- * @returns {mat4} out
- */
-mat4.translate = glMatrix.USE_SIMD ? mat4.SIMD.translate : mat4.scalar.translate;
+  return out;
+}
 
 /**
  * Scales the mat4 by the dimensions in the given vec3 not using vectorization
@@ -16355,68 +18029,29 @@ mat4.translate = glMatrix.USE_SIMD ? mat4.SIMD.translate : mat4.scalar.translate
  * @param {vec3} v the vec3 to scale the matrix by
  * @returns {mat4} out
  **/
-mat4.scalar.scale = function(out, a, v) {
-    var x = v[0], y = v[1], z = v[2];
+function scale(out, a, v) {
+  var x = v[0],
+      y = v[1],
+      z = v[2];
 
-    out[0] = a[0] * x;
-    out[1] = a[1] * x;
-    out[2] = a[2] * x;
-    out[3] = a[3] * x;
-    out[4] = a[4] * y;
-    out[5] = a[5] * y;
-    out[6] = a[6] * y;
-    out[7] = a[7] * y;
-    out[8] = a[8] * z;
-    out[9] = a[9] * z;
-    out[10] = a[10] * z;
-    out[11] = a[11] * z;
-    out[12] = a[12];
-    out[13] = a[13];
-    out[14] = a[14];
-    out[15] = a[15];
-    return out;
-};
-
-/**
- * Scales the mat4 by the dimensions in the given vec3 using vectorization
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to scale
- * @param {vec3} v the vec3 to scale the matrix by
- * @returns {mat4} out
- **/
-mat4.SIMD.scale = function(out, a, v) {
-    var a0, a1, a2;
-    var vec = SIMD.Float32x4(v[0], v[1], v[2], 0);
-
-    a0 = SIMD.Float32x4.load(a, 0);
-    SIMD.Float32x4.store(
-        out, 0, SIMD.Float32x4.mul(a0, SIMD.Float32x4.swizzle(vec, 0, 0, 0, 0)));
-
-    a1 = SIMD.Float32x4.load(a, 4);
-    SIMD.Float32x4.store(
-        out, 4, SIMD.Float32x4.mul(a1, SIMD.Float32x4.swizzle(vec, 1, 1, 1, 1)));
-
-    a2 = SIMD.Float32x4.load(a, 8);
-    SIMD.Float32x4.store(
-        out, 8, SIMD.Float32x4.mul(a2, SIMD.Float32x4.swizzle(vec, 2, 2, 2, 2)));
-
-    out[12] = a[12];
-    out[13] = a[13];
-    out[14] = a[14];
-    out[15] = a[15];
-    return out;
-};
-
-/**
- * Scales the mat4 by the dimensions in the given vec3 using SIMD if available and enabled
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to scale
- * @param {vec3} v the vec3 to scale the matrix by
- * @returns {mat4} out
- */
-mat4.scale = glMatrix.USE_SIMD ? mat4.SIMD.scale : mat4.scalar.scale;
+  out[0] = a[0] * x;
+  out[1] = a[1] * x;
+  out[2] = a[2] * x;
+  out[3] = a[3] * x;
+  out[4] = a[4] * y;
+  out[5] = a[5] * y;
+  out[6] = a[6] * y;
+  out[7] = a[7] * y;
+  out[8] = a[8] * z;
+  out[9] = a[9] * z;
+  out[10] = a[10] * z;
+  out[11] = a[11] * z;
+  out[12] = a[12];
+  out[13] = a[13];
+  out[14] = a[14];
+  out[15] = a[15];
+  return out;
+}
 
 /**
  * Rotates a mat4 by the given angle around the given axis
@@ -16427,317 +18062,213 @@ mat4.scale = glMatrix.USE_SIMD ? mat4.SIMD.scale : mat4.scalar.scale;
  * @param {vec3} axis the axis to rotate around
  * @returns {mat4} out
  */
-mat4.rotate = function (out, a, rad, axis) {
-    var x = axis[0], y = axis[1], z = axis[2],
-        len = Math.sqrt(x * x + y * y + z * z),
-        s, c, t,
-        a00, a01, a02, a03,
-        a10, a11, a12, a13,
-        a20, a21, a22, a23,
-        b00, b01, b02,
-        b10, b11, b12,
-        b20, b21, b22;
+function rotate(out, a, rad, axis) {
+  var x = axis[0],
+      y = axis[1],
+      z = axis[2];
+  var len = Math.sqrt(x * x + y * y + z * z);
+  var s = void 0,
+      c = void 0,
+      t = void 0;
+  var a00 = void 0,
+      a01 = void 0,
+      a02 = void 0,
+      a03 = void 0;
+  var a10 = void 0,
+      a11 = void 0,
+      a12 = void 0,
+      a13 = void 0;
+  var a20 = void 0,
+      a21 = void 0,
+      a22 = void 0,
+      a23 = void 0;
+  var b00 = void 0,
+      b01 = void 0,
+      b02 = void 0;
+  var b10 = void 0,
+      b11 = void 0,
+      b12 = void 0;
+  var b20 = void 0,
+      b21 = void 0,
+      b22 = void 0;
 
-    if (Math.abs(len) < glMatrix.EPSILON) { return null; }
+  if (Math.abs(len) < glMatrix.EPSILON) {
+    return null;
+  }
 
-    len = 1 / len;
-    x *= len;
-    y *= len;
-    z *= len;
+  len = 1 / len;
+  x *= len;
+  y *= len;
+  z *= len;
 
-    s = Math.sin(rad);
-    c = Math.cos(rad);
-    t = 1 - c;
+  s = Math.sin(rad);
+  c = Math.cos(rad);
+  t = 1 - c;
 
-    a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3];
-    a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7];
-    a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11];
+  a00 = a[0];a01 = a[1];a02 = a[2];a03 = a[3];
+  a10 = a[4];a11 = a[5];a12 = a[6];a13 = a[7];
+  a20 = a[8];a21 = a[9];a22 = a[10];a23 = a[11];
 
-    // Construct the elements of the rotation matrix
-    b00 = x * x * t + c; b01 = y * x * t + z * s; b02 = z * x * t - y * s;
-    b10 = x * y * t - z * s; b11 = y * y * t + c; b12 = z * y * t + x * s;
-    b20 = x * z * t + y * s; b21 = y * z * t - x * s; b22 = z * z * t + c;
+  // Construct the elements of the rotation matrix
+  b00 = x * x * t + c;b01 = y * x * t + z * s;b02 = z * x * t - y * s;
+  b10 = x * y * t - z * s;b11 = y * y * t + c;b12 = z * y * t + x * s;
+  b20 = x * z * t + y * s;b21 = y * z * t - x * s;b22 = z * z * t + c;
 
-    // Perform rotation-specific matrix multiplication
-    out[0] = a00 * b00 + a10 * b01 + a20 * b02;
-    out[1] = a01 * b00 + a11 * b01 + a21 * b02;
-    out[2] = a02 * b00 + a12 * b01 + a22 * b02;
-    out[3] = a03 * b00 + a13 * b01 + a23 * b02;
-    out[4] = a00 * b10 + a10 * b11 + a20 * b12;
-    out[5] = a01 * b10 + a11 * b11 + a21 * b12;
-    out[6] = a02 * b10 + a12 * b11 + a22 * b12;
-    out[7] = a03 * b10 + a13 * b11 + a23 * b12;
-    out[8] = a00 * b20 + a10 * b21 + a20 * b22;
-    out[9] = a01 * b20 + a11 * b21 + a21 * b22;
-    out[10] = a02 * b20 + a12 * b21 + a22 * b22;
-    out[11] = a03 * b20 + a13 * b21 + a23 * b22;
+  // Perform rotation-specific matrix multiplication
+  out[0] = a00 * b00 + a10 * b01 + a20 * b02;
+  out[1] = a01 * b00 + a11 * b01 + a21 * b02;
+  out[2] = a02 * b00 + a12 * b01 + a22 * b02;
+  out[3] = a03 * b00 + a13 * b01 + a23 * b02;
+  out[4] = a00 * b10 + a10 * b11 + a20 * b12;
+  out[5] = a01 * b10 + a11 * b11 + a21 * b12;
+  out[6] = a02 * b10 + a12 * b11 + a22 * b12;
+  out[7] = a03 * b10 + a13 * b11 + a23 * b12;
+  out[8] = a00 * b20 + a10 * b21 + a20 * b22;
+  out[9] = a01 * b20 + a11 * b21 + a21 * b22;
+  out[10] = a02 * b20 + a12 * b21 + a22 * b22;
+  out[11] = a03 * b20 + a13 * b21 + a23 * b22;
 
-    if (a !== out) { // If the source and destination differ, copy the unchanged last row
-        out[12] = a[12];
-        out[13] = a[13];
-        out[14] = a[14];
-        out[15] = a[15];
-    }
-    return out;
-};
+  if (a !== out) {
+    // If the source and destination differ, copy the unchanged last row
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+  }
+  return out;
+}
 
 /**
- * Rotates a matrix by the given angle around the X axis not using SIMD
+ * Rotates a matrix by the given angle around the X axis
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the matrix to rotate
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat4} out
  */
-mat4.scalar.rotateX = function (out, a, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad),
-        a10 = a[4],
-        a11 = a[5],
-        a12 = a[6],
-        a13 = a[7],
-        a20 = a[8],
-        a21 = a[9],
-        a22 = a[10],
-        a23 = a[11];
+function rotateX(out, a, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  var a10 = a[4];
+  var a11 = a[5];
+  var a12 = a[6];
+  var a13 = a[7];
+  var a20 = a[8];
+  var a21 = a[9];
+  var a22 = a[10];
+  var a23 = a[11];
 
-    if (a !== out) { // If the source and destination differ, copy the unchanged rows
-        out[0]  = a[0];
-        out[1]  = a[1];
-        out[2]  = a[2];
-        out[3]  = a[3];
-        out[12] = a[12];
-        out[13] = a[13];
-        out[14] = a[14];
-        out[15] = a[15];
-    }
+  if (a !== out) {
+    // If the source and destination differ, copy the unchanged rows
+    out[0] = a[0];
+    out[1] = a[1];
+    out[2] = a[2];
+    out[3] = a[3];
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+  }
 
-    // Perform axis-specific matrix multiplication
-    out[4] = a10 * c + a20 * s;
-    out[5] = a11 * c + a21 * s;
-    out[6] = a12 * c + a22 * s;
-    out[7] = a13 * c + a23 * s;
-    out[8] = a20 * c - a10 * s;
-    out[9] = a21 * c - a11 * s;
-    out[10] = a22 * c - a12 * s;
-    out[11] = a23 * c - a13 * s;
-    return out;
-};
+  // Perform axis-specific matrix multiplication
+  out[4] = a10 * c + a20 * s;
+  out[5] = a11 * c + a21 * s;
+  out[6] = a12 * c + a22 * s;
+  out[7] = a13 * c + a23 * s;
+  out[8] = a20 * c - a10 * s;
+  out[9] = a21 * c - a11 * s;
+  out[10] = a22 * c - a12 * s;
+  out[11] = a23 * c - a13 * s;
+  return out;
+}
 
 /**
- * Rotates a matrix by the given angle around the X axis using SIMD
+ * Rotates a matrix by the given angle around the Y axis
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the matrix to rotate
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat4} out
  */
-mat4.SIMD.rotateX = function (out, a, rad) {
-    var s = SIMD.Float32x4.splat(Math.sin(rad)),
-        c = SIMD.Float32x4.splat(Math.cos(rad));
+function rotateY(out, a, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  var a00 = a[0];
+  var a01 = a[1];
+  var a02 = a[2];
+  var a03 = a[3];
+  var a20 = a[8];
+  var a21 = a[9];
+  var a22 = a[10];
+  var a23 = a[11];
 
-    if (a !== out) { // If the source and destination differ, copy the unchanged rows
-      out[0]  = a[0];
-      out[1]  = a[1];
-      out[2]  = a[2];
-      out[3]  = a[3];
-      out[12] = a[12];
-      out[13] = a[13];
-      out[14] = a[14];
-      out[15] = a[15];
-    }
+  if (a !== out) {
+    // If the source and destination differ, copy the unchanged rows
+    out[4] = a[4];
+    out[5] = a[5];
+    out[6] = a[6];
+    out[7] = a[7];
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+  }
 
-    // Perform axis-specific matrix multiplication
-    var a_1 = SIMD.Float32x4.load(a, 4);
-    var a_2 = SIMD.Float32x4.load(a, 8);
-    SIMD.Float32x4.store(out, 4,
-                         SIMD.Float32x4.add(SIMD.Float32x4.mul(a_1, c), SIMD.Float32x4.mul(a_2, s)));
-    SIMD.Float32x4.store(out, 8,
-                         SIMD.Float32x4.sub(SIMD.Float32x4.mul(a_2, c), SIMD.Float32x4.mul(a_1, s)));
-    return out;
-};
+  // Perform axis-specific matrix multiplication
+  out[0] = a00 * c - a20 * s;
+  out[1] = a01 * c - a21 * s;
+  out[2] = a02 * c - a22 * s;
+  out[3] = a03 * c - a23 * s;
+  out[8] = a00 * s + a20 * c;
+  out[9] = a01 * s + a21 * c;
+  out[10] = a02 * s + a22 * c;
+  out[11] = a03 * s + a23 * c;
+  return out;
+}
 
 /**
- * Rotates a matrix by the given angle around the X axis using SIMD if availabe and enabled
+ * Rotates a matrix by the given angle around the Z axis
  *
  * @param {mat4} out the receiving matrix
  * @param {mat4} a the matrix to rotate
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat4} out
  */
-mat4.rotateX = glMatrix.USE_SIMD ? mat4.SIMD.rotateX : mat4.scalar.rotateX;
+function rotateZ(out, a, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  var a00 = a[0];
+  var a01 = a[1];
+  var a02 = a[2];
+  var a03 = a[3];
+  var a10 = a[4];
+  var a11 = a[5];
+  var a12 = a[6];
+  var a13 = a[7];
 
-/**
- * Rotates a matrix by the given angle around the Y axis not using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat4} out
- */
-mat4.scalar.rotateY = function (out, a, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad),
-        a00 = a[0],
-        a01 = a[1],
-        a02 = a[2],
-        a03 = a[3],
-        a20 = a[8],
-        a21 = a[9],
-        a22 = a[10],
-        a23 = a[11];
+  if (a !== out) {
+    // If the source and destination differ, copy the unchanged last row
+    out[8] = a[8];
+    out[9] = a[9];
+    out[10] = a[10];
+    out[11] = a[11];
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+  }
 
-    if (a !== out) { // If the source and destination differ, copy the unchanged rows
-        out[4]  = a[4];
-        out[5]  = a[5];
-        out[6]  = a[6];
-        out[7]  = a[7];
-        out[12] = a[12];
-        out[13] = a[13];
-        out[14] = a[14];
-        out[15] = a[15];
-    }
-
-    // Perform axis-specific matrix multiplication
-    out[0] = a00 * c - a20 * s;
-    out[1] = a01 * c - a21 * s;
-    out[2] = a02 * c - a22 * s;
-    out[3] = a03 * c - a23 * s;
-    out[8] = a00 * s + a20 * c;
-    out[9] = a01 * s + a21 * c;
-    out[10] = a02 * s + a22 * c;
-    out[11] = a03 * s + a23 * c;
-    return out;
-};
-
-/**
- * Rotates a matrix by the given angle around the Y axis using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat4} out
- */
-mat4.SIMD.rotateY = function (out, a, rad) {
-    var s = SIMD.Float32x4.splat(Math.sin(rad)),
-        c = SIMD.Float32x4.splat(Math.cos(rad));
-
-    if (a !== out) { // If the source and destination differ, copy the unchanged rows
-        out[4]  = a[4];
-        out[5]  = a[5];
-        out[6]  = a[6];
-        out[7]  = a[7];
-        out[12] = a[12];
-        out[13] = a[13];
-        out[14] = a[14];
-        out[15] = a[15];
-    }
-
-    // Perform axis-specific matrix multiplication
-    var a_0 = SIMD.Float32x4.load(a, 0);
-    var a_2 = SIMD.Float32x4.load(a, 8);
-    SIMD.Float32x4.store(out, 0,
-                         SIMD.Float32x4.sub(SIMD.Float32x4.mul(a_0, c), SIMD.Float32x4.mul(a_2, s)));
-    SIMD.Float32x4.store(out, 8,
-                         SIMD.Float32x4.add(SIMD.Float32x4.mul(a_0, s), SIMD.Float32x4.mul(a_2, c)));
-    return out;
-};
-
-/**
- * Rotates a matrix by the given angle around the Y axis if SIMD available and enabled
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat4} out
- */
- mat4.rotateY = glMatrix.USE_SIMD ? mat4.SIMD.rotateY : mat4.scalar.rotateY;
-
-/**
- * Rotates a matrix by the given angle around the Z axis not using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat4} out
- */
-mat4.scalar.rotateZ = function (out, a, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad),
-        a00 = a[0],
-        a01 = a[1],
-        a02 = a[2],
-        a03 = a[3],
-        a10 = a[4],
-        a11 = a[5],
-        a12 = a[6],
-        a13 = a[7];
-
-    if (a !== out) { // If the source and destination differ, copy the unchanged last row
-        out[8]  = a[8];
-        out[9]  = a[9];
-        out[10] = a[10];
-        out[11] = a[11];
-        out[12] = a[12];
-        out[13] = a[13];
-        out[14] = a[14];
-        out[15] = a[15];
-    }
-
-    // Perform axis-specific matrix multiplication
-    out[0] = a00 * c + a10 * s;
-    out[1] = a01 * c + a11 * s;
-    out[2] = a02 * c + a12 * s;
-    out[3] = a03 * c + a13 * s;
-    out[4] = a10 * c - a00 * s;
-    out[5] = a11 * c - a01 * s;
-    out[6] = a12 * c - a02 * s;
-    out[7] = a13 * c - a03 * s;
-    return out;
-};
-
-/**
- * Rotates a matrix by the given angle around the Z axis using SIMD
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat4} out
- */
-mat4.SIMD.rotateZ = function (out, a, rad) {
-    var s = SIMD.Float32x4.splat(Math.sin(rad)),
-        c = SIMD.Float32x4.splat(Math.cos(rad));
-
-    if (a !== out) { // If the source and destination differ, copy the unchanged last row
-        out[8]  = a[8];
-        out[9]  = a[9];
-        out[10] = a[10];
-        out[11] = a[11];
-        out[12] = a[12];
-        out[13] = a[13];
-        out[14] = a[14];
-        out[15] = a[15];
-    }
-
-    // Perform axis-specific matrix multiplication
-    var a_0 = SIMD.Float32x4.load(a, 0);
-    var a_1 = SIMD.Float32x4.load(a, 4);
-    SIMD.Float32x4.store(out, 0,
-                         SIMD.Float32x4.add(SIMD.Float32x4.mul(a_0, c), SIMD.Float32x4.mul(a_1, s)));
-    SIMD.Float32x4.store(out, 4,
-                         SIMD.Float32x4.sub(SIMD.Float32x4.mul(a_1, c), SIMD.Float32x4.mul(a_0, s)));
-    return out;
-};
-
-/**
- * Rotates a matrix by the given angle around the Z axis if SIMD available and enabled
- *
- * @param {mat4} out the receiving matrix
- * @param {mat4} a the matrix to rotate
- * @param {Number} rad the angle to rotate the matrix by
- * @returns {mat4} out
- */
- mat4.rotateZ = glMatrix.USE_SIMD ? mat4.SIMD.rotateZ : mat4.scalar.rotateZ;
+  // Perform axis-specific matrix multiplication
+  out[0] = a00 * c + a10 * s;
+  out[1] = a01 * c + a11 * s;
+  out[2] = a02 * c + a12 * s;
+  out[3] = a03 * c + a13 * s;
+  out[4] = a10 * c - a00 * s;
+  out[5] = a11 * c - a01 * s;
+  out[6] = a12 * c - a02 * s;
+  out[7] = a13 * c - a03 * s;
+  return out;
+}
 
 /**
  * Creates a matrix from a vector translation
@@ -16750,24 +18281,24 @@ mat4.SIMD.rotateZ = function (out, a, rad) {
  * @param {vec3} v Translation vector
  * @returns {mat4} out
  */
-mat4.fromTranslation = function(out, v) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = 1;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = 1;
-    out[11] = 0;
-    out[12] = v[0];
-    out[13] = v[1];
-    out[14] = v[2];
-    out[15] = 1;
-    return out;
+function fromTranslation(out, v) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = 1;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 1;
+  out[11] = 0;
+  out[12] = v[0];
+  out[13] = v[1];
+  out[14] = v[2];
+  out[15] = 1;
+  return out;
 }
 
 /**
@@ -16781,24 +18312,24 @@ mat4.fromTranslation = function(out, v) {
  * @param {vec3} v Scaling vector
  * @returns {mat4} out
  */
-mat4.fromScaling = function(out, v) {
-    out[0] = v[0];
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = v[1];
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = v[2];
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
+function fromScaling(out, v) {
+  out[0] = v[0];
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = v[1];
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = v[2];
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
 }
 
 /**
@@ -16813,40 +18344,46 @@ mat4.fromScaling = function(out, v) {
  * @param {vec3} axis the axis to rotate around
  * @returns {mat4} out
  */
-mat4.fromRotation = function(out, rad, axis) {
-    var x = axis[0], y = axis[1], z = axis[2],
-        len = Math.sqrt(x * x + y * y + z * z),
-        s, c, t;
+function fromRotation(out, rad, axis) {
+  var x = axis[0],
+      y = axis[1],
+      z = axis[2];
+  var len = Math.sqrt(x * x + y * y + z * z);
+  var s = void 0,
+      c = void 0,
+      t = void 0;
 
-    if (Math.abs(len) < glMatrix.EPSILON) { return null; }
+  if (Math.abs(len) < glMatrix.EPSILON) {
+    return null;
+  }
 
-    len = 1 / len;
-    x *= len;
-    y *= len;
-    z *= len;
+  len = 1 / len;
+  x *= len;
+  y *= len;
+  z *= len;
 
-    s = Math.sin(rad);
-    c = Math.cos(rad);
-    t = 1 - c;
+  s = Math.sin(rad);
+  c = Math.cos(rad);
+  t = 1 - c;
 
-    // Perform rotation-specific matrix multiplication
-    out[0] = x * x * t + c;
-    out[1] = y * x * t + z * s;
-    out[2] = z * x * t - y * s;
-    out[3] = 0;
-    out[4] = x * y * t - z * s;
-    out[5] = y * y * t + c;
-    out[6] = z * y * t + x * s;
-    out[7] = 0;
-    out[8] = x * z * t + y * s;
-    out[9] = y * z * t - x * s;
-    out[10] = z * z * t + c;
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
+  // Perform rotation-specific matrix multiplication
+  out[0] = x * x * t + c;
+  out[1] = y * x * t + z * s;
+  out[2] = z * x * t - y * s;
+  out[3] = 0;
+  out[4] = x * y * t - z * s;
+  out[5] = y * y * t + c;
+  out[6] = z * y * t + x * s;
+  out[7] = 0;
+  out[8] = x * z * t + y * s;
+  out[9] = y * z * t - x * s;
+  out[10] = z * z * t + c;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
 }
 
 /**
@@ -16860,28 +18397,28 @@ mat4.fromRotation = function(out, rad, axis) {
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat4} out
  */
-mat4.fromXRotation = function(out, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad);
+function fromXRotation(out, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
 
-    // Perform axis-specific matrix multiplication
-    out[0]  = 1;
-    out[1]  = 0;
-    out[2]  = 0;
-    out[3]  = 0;
-    out[4] = 0;
-    out[5] = c;
-    out[6] = s;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = -s;
-    out[10] = c;
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
+  // Perform axis-specific matrix multiplication
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = c;
+  out[6] = s;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = -s;
+  out[10] = c;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
 }
 
 /**
@@ -16895,28 +18432,28 @@ mat4.fromXRotation = function(out, rad) {
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat4} out
  */
-mat4.fromYRotation = function(out, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad);
+function fromYRotation(out, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
 
-    // Perform axis-specific matrix multiplication
-    out[0]  = c;
-    out[1]  = 0;
-    out[2]  = -s;
-    out[3]  = 0;
-    out[4] = 0;
-    out[5] = 1;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = s;
-    out[9] = 0;
-    out[10] = c;
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
+  // Perform axis-specific matrix multiplication
+  out[0] = c;
+  out[1] = 0;
+  out[2] = -s;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = 1;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = s;
+  out[9] = 0;
+  out[10] = c;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
 }
 
 /**
@@ -16930,28 +18467,28 @@ mat4.fromYRotation = function(out, rad) {
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat4} out
  */
-mat4.fromZRotation = function(out, rad) {
-    var s = Math.sin(rad),
-        c = Math.cos(rad);
+function fromZRotation(out, rad) {
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
 
-    // Perform axis-specific matrix multiplication
-    out[0]  = c;
-    out[1]  = s;
-    out[2]  = 0;
-    out[3]  = 0;
-    out[4] = -s;
-    out[5] = c;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = 1;
-    out[11] = 0;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
-    return out;
+  // Perform axis-specific matrix multiplication
+  out[0] = c;
+  out[1] = s;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = -s;
+  out[5] = c;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 1;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
 }
 
 /**
@@ -16960,7 +18497,7 @@ mat4.fromZRotation = function(out, rad) {
  *
  *     mat4.identity(dest);
  *     mat4.translate(dest, vec);
- *     var quatMat = mat4.create();
+ *     let quatMat = mat4.create();
  *     quat4.toMat4(quat, quatMat);
  *     mat4.multiply(dest, quatMat);
  *
@@ -16969,42 +18506,45 @@ mat4.fromZRotation = function(out, rad) {
  * @param {vec3} v Translation vector
  * @returns {mat4} out
  */
-mat4.fromRotationTranslation = function (out, q, v) {
-    // Quaternion math
-    var x = q[0], y = q[1], z = q[2], w = q[3],
-        x2 = x + x,
-        y2 = y + y,
-        z2 = z + z,
+function fromRotationTranslation(out, q, v) {
+  // Quaternion math
+  var x = q[0],
+      y = q[1],
+      z = q[2],
+      w = q[3];
+  var x2 = x + x;
+  var y2 = y + y;
+  var z2 = z + z;
 
-        xx = x * x2,
-        xy = x * y2,
-        xz = x * z2,
-        yy = y * y2,
-        yz = y * z2,
-        zz = z * z2,
-        wx = w * x2,
-        wy = w * y2,
-        wz = w * z2;
+  var xx = x * x2;
+  var xy = x * y2;
+  var xz = x * z2;
+  var yy = y * y2;
+  var yz = y * z2;
+  var zz = z * z2;
+  var wx = w * x2;
+  var wy = w * y2;
+  var wz = w * z2;
 
-    out[0] = 1 - (yy + zz);
-    out[1] = xy + wz;
-    out[2] = xz - wy;
-    out[3] = 0;
-    out[4] = xy - wz;
-    out[5] = 1 - (xx + zz);
-    out[6] = yz + wx;
-    out[7] = 0;
-    out[8] = xz + wy;
-    out[9] = yz - wx;
-    out[10] = 1 - (xx + yy);
-    out[11] = 0;
-    out[12] = v[0];
-    out[13] = v[1];
-    out[14] = v[2];
-    out[15] = 1;
+  out[0] = 1 - (yy + zz);
+  out[1] = xy + wz;
+  out[2] = xz - wy;
+  out[3] = 0;
+  out[4] = xy - wz;
+  out[5] = 1 - (xx + zz);
+  out[6] = yz + wx;
+  out[7] = 0;
+  out[8] = xz + wy;
+  out[9] = yz - wx;
+  out[10] = 1 - (xx + yy);
+  out[11] = 0;
+  out[12] = v[0];
+  out[13] = v[1];
+  out[14] = v[2];
+  out[15] = 1;
 
-    return out;
-};
+  return out;
+}
 
 /**
  * Returns the translation vector component of a transformation
@@ -17015,13 +18555,41 @@ mat4.fromRotationTranslation = function (out, q, v) {
  * @param  {mat4} mat Matrix to be decomposed (input)
  * @return {vec3} out
  */
-mat4.getTranslation = function (out, mat) {
+function getTranslation(out, mat) {
   out[0] = mat[12];
   out[1] = mat[13];
   out[2] = mat[14];
 
   return out;
-};
+}
+
+/**
+ * Returns the scaling factor component of a transformation
+ *  matrix. If a matrix is built with fromRotationTranslationScale
+ *  with a normalized Quaternion paramter, the returned vector will be
+ *  the same as the scaling vector
+ *  originally supplied.
+ * @param  {vec3} out Vector to receive scaling factor component
+ * @param  {mat4} mat Matrix to be decomposed (input)
+ * @return {vec3} out
+ */
+function getScaling(out, mat) {
+  var m11 = mat[0];
+  var m12 = mat[1];
+  var m13 = mat[2];
+  var m21 = mat[4];
+  var m22 = mat[5];
+  var m23 = mat[6];
+  var m31 = mat[8];
+  var m32 = mat[9];
+  var m33 = mat[10];
+
+  out[0] = Math.sqrt(m11 * m11 + m12 * m12 + m13 * m13);
+  out[1] = Math.sqrt(m21 * m21 + m22 * m22 + m23 * m23);
+  out[2] = Math.sqrt(m31 * m31 + m32 * m32 + m33 * m33);
+
+  return out;
+}
 
 /**
  * Returns a quaternion representing the rotational component
@@ -17032,30 +18600,30 @@ mat4.getTranslation = function (out, mat) {
  * @param {mat4} mat Matrix to be decomposed (input)
  * @return {quat} out
  */
-mat4.getRotation = function (out, mat) {
+function getRotation(out, mat) {
   // Algorithm taken from http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
   var trace = mat[0] + mat[5] + mat[10];
   var S = 0;
 
-  if (trace > 0) { 
+  if (trace > 0) {
     S = Math.sqrt(trace + 1.0) * 2;
     out[3] = 0.25 * S;
     out[0] = (mat[6] - mat[9]) / S;
-    out[1] = (mat[8] - mat[2]) / S; 
-    out[2] = (mat[1] - mat[4]) / S; 
-  } else if ((mat[0] > mat[5])&(mat[0] > mat[10])) { 
+    out[1] = (mat[8] - mat[2]) / S;
+    out[2] = (mat[1] - mat[4]) / S;
+  } else if (mat[0] > mat[5] & mat[0] > mat[10]) {
     S = Math.sqrt(1.0 + mat[0] - mat[5] - mat[10]) * 2;
     out[3] = (mat[6] - mat[9]) / S;
     out[0] = 0.25 * S;
-    out[1] = (mat[1] + mat[4]) / S; 
-    out[2] = (mat[8] + mat[2]) / S; 
-  } else if (mat[5] > mat[10]) { 
+    out[1] = (mat[1] + mat[4]) / S;
+    out[2] = (mat[8] + mat[2]) / S;
+  } else if (mat[5] > mat[10]) {
     S = Math.sqrt(1.0 + mat[5] - mat[0] - mat[10]) * 2;
     out[3] = (mat[8] - mat[2]) / S;
-    out[0] = (mat[1] + mat[4]) / S; 
+    out[0] = (mat[1] + mat[4]) / S;
     out[1] = 0.25 * S;
-    out[2] = (mat[6] + mat[9]) / S; 
-  } else { 
+    out[2] = (mat[6] + mat[9]) / S;
+  } else {
     S = Math.sqrt(1.0 + mat[10] - mat[0] - mat[5]) * 2;
     out[3] = (mat[1] - mat[4]) / S;
     out[0] = (mat[8] + mat[2]) / S;
@@ -17064,7 +18632,7 @@ mat4.getRotation = function (out, mat) {
   }
 
   return out;
-};
+}
 
 /**
  * Creates a matrix from a quaternion rotation, vector translation and vector scale
@@ -17072,7 +18640,7 @@ mat4.getRotation = function (out, mat) {
  *
  *     mat4.identity(dest);
  *     mat4.translate(dest, vec);
- *     var quatMat = mat4.create();
+ *     let quatMat = mat4.create();
  *     quat4.toMat4(quat, quatMat);
  *     mat4.multiply(dest, quatMat);
  *     mat4.scale(dest, scale)
@@ -17083,45 +18651,48 @@ mat4.getRotation = function (out, mat) {
  * @param {vec3} s Scaling vector
  * @returns {mat4} out
  */
-mat4.fromRotationTranslationScale = function (out, q, v, s) {
-    // Quaternion math
-    var x = q[0], y = q[1], z = q[2], w = q[3],
-        x2 = x + x,
-        y2 = y + y,
-        z2 = z + z,
+function fromRotationTranslationScale(out, q, v, s) {
+  // Quaternion math
+  var x = q[0],
+      y = q[1],
+      z = q[2],
+      w = q[3];
+  var x2 = x + x;
+  var y2 = y + y;
+  var z2 = z + z;
 
-        xx = x * x2,
-        xy = x * y2,
-        xz = x * z2,
-        yy = y * y2,
-        yz = y * z2,
-        zz = z * z2,
-        wx = w * x2,
-        wy = w * y2,
-        wz = w * z2,
-        sx = s[0],
-        sy = s[1],
-        sz = s[2];
+  var xx = x * x2;
+  var xy = x * y2;
+  var xz = x * z2;
+  var yy = y * y2;
+  var yz = y * z2;
+  var zz = z * z2;
+  var wx = w * x2;
+  var wy = w * y2;
+  var wz = w * z2;
+  var sx = s[0];
+  var sy = s[1];
+  var sz = s[2];
 
-    out[0] = (1 - (yy + zz)) * sx;
-    out[1] = (xy + wz) * sx;
-    out[2] = (xz - wy) * sx;
-    out[3] = 0;
-    out[4] = (xy - wz) * sy;
-    out[5] = (1 - (xx + zz)) * sy;
-    out[6] = (yz + wx) * sy;
-    out[7] = 0;
-    out[8] = (xz + wy) * sz;
-    out[9] = (yz - wx) * sz;
-    out[10] = (1 - (xx + yy)) * sz;
-    out[11] = 0;
-    out[12] = v[0];
-    out[13] = v[1];
-    out[14] = v[2];
-    out[15] = 1;
+  out[0] = (1 - (yy + zz)) * sx;
+  out[1] = (xy + wz) * sx;
+  out[2] = (xz - wy) * sx;
+  out[3] = 0;
+  out[4] = (xy - wz) * sy;
+  out[5] = (1 - (xx + zz)) * sy;
+  out[6] = (yz + wx) * sy;
+  out[7] = 0;
+  out[8] = (xz + wy) * sz;
+  out[9] = (yz - wx) * sz;
+  out[10] = (1 - (xx + yy)) * sz;
+  out[11] = 0;
+  out[12] = v[0];
+  out[13] = v[1];
+  out[14] = v[2];
+  out[15] = 1;
 
-    return out;
-};
+  return out;
+}
 
 /**
  * Creates a matrix from a quaternion rotation, vector translation and vector scale, rotating and scaling around the given origin
@@ -17130,7 +18701,7 @@ mat4.fromRotationTranslationScale = function (out, q, v, s) {
  *     mat4.identity(dest);
  *     mat4.translate(dest, vec);
  *     mat4.translate(dest, origin);
- *     var quatMat = mat4.create();
+ *     let quatMat = mat4.create();
  *     quat4.toMat4(quat, quatMat);
  *     mat4.multiply(dest, quatMat);
  *     mat4.scale(dest, scale)
@@ -17143,30 +18714,33 @@ mat4.fromRotationTranslationScale = function (out, q, v, s) {
  * @param {vec3} o The origin vector around which to scale and rotate
  * @returns {mat4} out
  */
-mat4.fromRotationTranslationScaleOrigin = function (out, q, v, s, o) {
+function fromRotationTranslationScaleOrigin(out, q, v, s, o) {
   // Quaternion math
-  var x = q[0], y = q[1], z = q[2], w = q[3],
-      x2 = x + x,
-      y2 = y + y,
-      z2 = z + z,
+  var x = q[0],
+      y = q[1],
+      z = q[2],
+      w = q[3];
+  var x2 = x + x;
+  var y2 = y + y;
+  var z2 = z + z;
 
-      xx = x * x2,
-      xy = x * y2,
-      xz = x * z2,
-      yy = y * y2,
-      yz = y * z2,
-      zz = z * z2,
-      wx = w * x2,
-      wy = w * y2,
-      wz = w * z2,
+  var xx = x * x2;
+  var xy = x * y2;
+  var xz = x * z2;
+  var yy = y * y2;
+  var yz = y * z2;
+  var zz = z * z2;
+  var wx = w * x2;
+  var wy = w * y2;
+  var wz = w * z2;
 
-      sx = s[0],
-      sy = s[1],
-      sz = s[2],
+  var sx = s[0];
+  var sy = s[1];
+  var sz = s[2];
 
-      ox = o[0],
-      oy = o[1],
-      oz = o[2];
+  var ox = o[0];
+  var oy = o[1];
+  var oz = o[2];
 
   out[0] = (1 - (yy + zz)) * sx;
   out[1] = (xy + wz) * sx;
@@ -17186,7 +18760,7 @@ mat4.fromRotationTranslationScaleOrigin = function (out, q, v, s, o) {
   out[15] = 1;
 
   return out;
-};
+}
 
 /**
  * Calculates a 4x4 matrix from the given quaternion
@@ -17196,44 +18770,47 @@ mat4.fromRotationTranslationScaleOrigin = function (out, q, v, s, o) {
  *
  * @returns {mat4} out
  */
-mat4.fromQuat = function (out, q) {
-    var x = q[0], y = q[1], z = q[2], w = q[3],
-        x2 = x + x,
-        y2 = y + y,
-        z2 = z + z,
+function fromQuat(out, q) {
+  var x = q[0],
+      y = q[1],
+      z = q[2],
+      w = q[3];
+  var x2 = x + x;
+  var y2 = y + y;
+  var z2 = z + z;
 
-        xx = x * x2,
-        yx = y * x2,
-        yy = y * y2,
-        zx = z * x2,
-        zy = z * y2,
-        zz = z * z2,
-        wx = w * x2,
-        wy = w * y2,
-        wz = w * z2;
+  var xx = x * x2;
+  var yx = y * x2;
+  var yy = y * y2;
+  var zx = z * x2;
+  var zy = z * y2;
+  var zz = z * z2;
+  var wx = w * x2;
+  var wy = w * y2;
+  var wz = w * z2;
 
-    out[0] = 1 - yy - zz;
-    out[1] = yx + wz;
-    out[2] = zx - wy;
-    out[3] = 0;
+  out[0] = 1 - yy - zz;
+  out[1] = yx + wz;
+  out[2] = zx - wy;
+  out[3] = 0;
 
-    out[4] = yx - wz;
-    out[5] = 1 - xx - zz;
-    out[6] = zy + wx;
-    out[7] = 0;
+  out[4] = yx - wz;
+  out[5] = 1 - xx - zz;
+  out[6] = zy + wx;
+  out[7] = 0;
 
-    out[8] = zx + wy;
-    out[9] = zy - wx;
-    out[10] = 1 - xx - yy;
-    out[11] = 0;
+  out[8] = zx + wy;
+  out[9] = zy - wx;
+  out[10] = 1 - xx - yy;
+  out[11] = 0;
 
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = 0;
-    out[15] = 1;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
 
-    return out;
-};
+  return out;
+}
 
 /**
  * Generates a frustum matrix with the given bounds
@@ -17247,28 +18824,28 @@ mat4.fromQuat = function (out, q) {
  * @param {Number} far Far bound of the frustum
  * @returns {mat4} out
  */
-mat4.frustum = function (out, left, right, bottom, top, near, far) {
-    var rl = 1 / (right - left),
-        tb = 1 / (top - bottom),
-        nf = 1 / (near - far);
-    out[0] = (near * 2) * rl;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = (near * 2) * tb;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = (right + left) * rl;
-    out[9] = (top + bottom) * tb;
-    out[10] = (far + near) * nf;
-    out[11] = -1;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = (far * near * 2) * nf;
-    out[15] = 0;
-    return out;
-};
+function frustum(out, left, right, bottom, top, near, far) {
+  var rl = 1 / (right - left);
+  var tb = 1 / (top - bottom);
+  var nf = 1 / (near - far);
+  out[0] = near * 2 * rl;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = near * 2 * tb;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = (right + left) * rl;
+  out[9] = (top + bottom) * tb;
+  out[10] = (far + near) * nf;
+  out[11] = -1;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = far * near * 2 * nf;
+  out[15] = 0;
+  return out;
+}
 
 /**
  * Generates a perspective projection matrix with the given bounds
@@ -17280,27 +18857,27 @@ mat4.frustum = function (out, left, right, bottom, top, near, far) {
  * @param {number} far Far bound of the frustum
  * @returns {mat4} out
  */
-mat4.perspective = function (out, fovy, aspect, near, far) {
-    var f = 1.0 / Math.tan(fovy / 2),
-        nf = 1 / (near - far);
-    out[0] = f / aspect;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = f;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = (far + near) * nf;
-    out[11] = -1;
-    out[12] = 0;
-    out[13] = 0;
-    out[14] = (2 * far * near) * nf;
-    out[15] = 0;
-    return out;
-};
+function perspective(out, fovy, aspect, near, far) {
+  var f = 1.0 / Math.tan(fovy / 2);
+  var nf = 1 / (near - far);
+  out[0] = f / aspect;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = f;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = (far + near) * nf;
+  out[11] = -1;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 2 * far * near * nf;
+  out[15] = 0;
+  return out;
+}
 
 /**
  * Generates a perspective projection matrix with the given field of view.
@@ -17313,31 +18890,31 @@ mat4.perspective = function (out, fovy, aspect, near, far) {
  * @param {number} far Far bound of the frustum
  * @returns {mat4} out
  */
-mat4.perspectiveFromFieldOfView = function (out, fov, near, far) {
-    var upTan = Math.tan(fov.upDegrees * Math.PI/180.0),
-        downTan = Math.tan(fov.downDegrees * Math.PI/180.0),
-        leftTan = Math.tan(fov.leftDegrees * Math.PI/180.0),
-        rightTan = Math.tan(fov.rightDegrees * Math.PI/180.0),
-        xScale = 2.0 / (leftTan + rightTan),
-        yScale = 2.0 / (upTan + downTan);
+function perspectiveFromFieldOfView(out, fov, near, far) {
+  var upTan = Math.tan(fov.upDegrees * Math.PI / 180.0);
+  var downTan = Math.tan(fov.downDegrees * Math.PI / 180.0);
+  var leftTan = Math.tan(fov.leftDegrees * Math.PI / 180.0);
+  var rightTan = Math.tan(fov.rightDegrees * Math.PI / 180.0);
+  var xScale = 2.0 / (leftTan + rightTan);
+  var yScale = 2.0 / (upTan + downTan);
 
-    out[0] = xScale;
-    out[1] = 0.0;
-    out[2] = 0.0;
-    out[3] = 0.0;
-    out[4] = 0.0;
-    out[5] = yScale;
-    out[6] = 0.0;
-    out[7] = 0.0;
-    out[8] = -((leftTan - rightTan) * xScale * 0.5);
-    out[9] = ((upTan - downTan) * yScale * 0.5);
-    out[10] = far / (near - far);
-    out[11] = -1.0;
-    out[12] = 0.0;
-    out[13] = 0.0;
-    out[14] = (far * near) / (near - far);
-    out[15] = 0.0;
-    return out;
+  out[0] = xScale;
+  out[1] = 0.0;
+  out[2] = 0.0;
+  out[3] = 0.0;
+  out[4] = 0.0;
+  out[5] = yScale;
+  out[6] = 0.0;
+  out[7] = 0.0;
+  out[8] = -((leftTan - rightTan) * xScale * 0.5);
+  out[9] = (upTan - downTan) * yScale * 0.5;
+  out[10] = far / (near - far);
+  out[11] = -1.0;
+  out[12] = 0.0;
+  out[13] = 0.0;
+  out[14] = far * near / (near - far);
+  out[15] = 0.0;
+  return out;
 }
 
 /**
@@ -17352,28 +18929,28 @@ mat4.perspectiveFromFieldOfView = function (out, fov, near, far) {
  * @param {number} far Far bound of the frustum
  * @returns {mat4} out
  */
-mat4.ortho = function (out, left, right, bottom, top, near, far) {
-    var lr = 1 / (left - right),
-        bt = 1 / (bottom - top),
-        nf = 1 / (near - far);
-    out[0] = -2 * lr;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
-    out[5] = -2 * bt;
-    out[6] = 0;
-    out[7] = 0;
-    out[8] = 0;
-    out[9] = 0;
-    out[10] = 2 * nf;
-    out[11] = 0;
-    out[12] = (left + right) * lr;
-    out[13] = (top + bottom) * bt;
-    out[14] = (far + near) * nf;
-    out[15] = 1;
-    return out;
-};
+function ortho(out, left, right, bottom, top, near, far) {
+  var lr = 1 / (left - right);
+  var bt = 1 / (bottom - top);
+  var nf = 1 / (near - far);
+  out[0] = -2 * lr;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = -2 * bt;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 2 * nf;
+  out[11] = 0;
+  out[12] = (left + right) * lr;
+  out[13] = (top + bottom) * bt;
+  out[14] = (far + near) * nf;
+  out[15] = 1;
+  return out;
+}
 
 /**
  * Generates a look-at matrix with the given eye position, focal point, and up axis
@@ -17384,96 +18961,152 @@ mat4.ortho = function (out, left, right, bottom, top, near, far) {
  * @param {vec3} up vec3 pointing up
  * @returns {mat4} out
  */
-mat4.lookAt = function (out, eye, center, up) {
-    var x0, x1, x2, y0, y1, y2, z0, z1, z2, len,
-        eyex = eye[0],
-        eyey = eye[1],
-        eyez = eye[2],
-        upx = up[0],
-        upy = up[1],
-        upz = up[2],
-        centerx = center[0],
-        centery = center[1],
-        centerz = center[2];
+function lookAt(out, eye, center, up) {
+  var x0 = void 0,
+      x1 = void 0,
+      x2 = void 0,
+      y0 = void 0,
+      y1 = void 0,
+      y2 = void 0,
+      z0 = void 0,
+      z1 = void 0,
+      z2 = void 0,
+      len = void 0;
+  var eyex = eye[0];
+  var eyey = eye[1];
+  var eyez = eye[2];
+  var upx = up[0];
+  var upy = up[1];
+  var upz = up[2];
+  var centerx = center[0];
+  var centery = center[1];
+  var centerz = center[2];
 
-    if (Math.abs(eyex - centerx) < glMatrix.EPSILON &&
-        Math.abs(eyey - centery) < glMatrix.EPSILON &&
-        Math.abs(eyez - centerz) < glMatrix.EPSILON) {
-        return mat4.identity(out);
-    }
+  if (Math.abs(eyex - centerx) < glMatrix.EPSILON && Math.abs(eyey - centery) < glMatrix.EPSILON && Math.abs(eyez - centerz) < glMatrix.EPSILON) {
+    return mat4.identity(out);
+  }
 
-    z0 = eyex - centerx;
-    z1 = eyey - centery;
-    z2 = eyez - centerz;
+  z0 = eyex - centerx;
+  z1 = eyey - centery;
+  z2 = eyez - centerz;
 
-    len = 1 / Math.sqrt(z0 * z0 + z1 * z1 + z2 * z2);
+  len = 1 / Math.sqrt(z0 * z0 + z1 * z1 + z2 * z2);
+  z0 *= len;
+  z1 *= len;
+  z2 *= len;
+
+  x0 = upy * z2 - upz * z1;
+  x1 = upz * z0 - upx * z2;
+  x2 = upx * z1 - upy * z0;
+  len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
+  if (!len) {
+    x0 = 0;
+    x1 = 0;
+    x2 = 0;
+  } else {
+    len = 1 / len;
+    x0 *= len;
+    x1 *= len;
+    x2 *= len;
+  }
+
+  y0 = z1 * x2 - z2 * x1;
+  y1 = z2 * x0 - z0 * x2;
+  y2 = z0 * x1 - z1 * x0;
+
+  len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
+  if (!len) {
+    y0 = 0;
+    y1 = 0;
+    y2 = 0;
+  } else {
+    len = 1 / len;
+    y0 *= len;
+    y1 *= len;
+    y2 *= len;
+  }
+
+  out[0] = x0;
+  out[1] = y0;
+  out[2] = z0;
+  out[3] = 0;
+  out[4] = x1;
+  out[5] = y1;
+  out[6] = z1;
+  out[7] = 0;
+  out[8] = x2;
+  out[9] = y2;
+  out[10] = z2;
+  out[11] = 0;
+  out[12] = -(x0 * eyex + x1 * eyey + x2 * eyez);
+  out[13] = -(y0 * eyex + y1 * eyey + y2 * eyez);
+  out[14] = -(z0 * eyex + z1 * eyey + z2 * eyez);
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Generates a matrix that makes something look at something else.
+ *
+ * @param {mat4} out mat4 frustum matrix will be written into
+ * @param {vec3} eye Position of the viewer
+ * @param {vec3} center Point the viewer is looking at
+ * @param {vec3} up vec3 pointing up
+ * @returns {mat4} out
+ */
+function targetTo(out, eye, target, up) {
+  var eyex = eye[0],
+      eyey = eye[1],
+      eyez = eye[2],
+      upx = up[0],
+      upy = up[1],
+      upz = up[2];
+
+  var z0 = eyex - target[0],
+      z1 = eyey - target[1],
+      z2 = eyez - target[2];
+
+  var len = z0 * z0 + z1 * z1 + z2 * z2;
+  if (len > 0) {
+    len = 1 / Math.sqrt(len);
     z0 *= len;
     z1 *= len;
     z2 *= len;
+  }
 
-    x0 = upy * z2 - upz * z1;
-    x1 = upz * z0 - upx * z2;
-    x2 = upx * z1 - upy * z0;
-    len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
-    if (!len) {
-        x0 = 0;
-        x1 = 0;
-        x2 = 0;
-    } else {
-        len = 1 / len;
-        x0 *= len;
-        x1 *= len;
-        x2 *= len;
-    }
+  var x0 = upy * z2 - upz * z1,
+      x1 = upz * z0 - upx * z2,
+      x2 = upx * z1 - upy * z0;
 
-    y0 = z1 * x2 - z2 * x1;
-    y1 = z2 * x0 - z0 * x2;
-    y2 = z0 * x1 - z1 * x0;
-
-    len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
-    if (!len) {
-        y0 = 0;
-        y1 = 0;
-        y2 = 0;
-    } else {
-        len = 1 / len;
-        y0 *= len;
-        y1 *= len;
-        y2 *= len;
-    }
-
-    out[0] = x0;
-    out[1] = y0;
-    out[2] = z0;
-    out[3] = 0;
-    out[4] = x1;
-    out[5] = y1;
-    out[6] = z1;
-    out[7] = 0;
-    out[8] = x2;
-    out[9] = y2;
-    out[10] = z2;
-    out[11] = 0;
-    out[12] = -(x0 * eyex + x1 * eyey + x2 * eyez);
-    out[13] = -(y0 * eyex + y1 * eyey + y2 * eyez);
-    out[14] = -(z0 * eyex + z1 * eyey + z2 * eyez);
-    out[15] = 1;
-
-    return out;
+  out[0] = x0;
+  out[1] = x1;
+  out[2] = x2;
+  out[3] = 0;
+  out[4] = z1 * x2 - z2 * x1;
+  out[5] = z2 * x0 - z0 * x2;
+  out[6] = z0 * x1 - z1 * x0;
+  out[7] = 0;
+  out[8] = z0;
+  out[9] = z1;
+  out[10] = z2;
+  out[11] = 0;
+  out[12] = eyex;
+  out[13] = eyey;
+  out[14] = eyez;
+  out[15] = 1;
+  return out;
 };
 
 /**
  * Returns a string representation of a mat4
  *
- * @param {mat4} mat matrix to represent as a string
+ * @param {mat4} a matrix to represent as a string
  * @returns {String} string representation of the matrix
  */
-mat4.str = function (a) {
-    return 'mat4(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ', ' +
-                    a[4] + ', ' + a[5] + ', ' + a[6] + ', ' + a[7] + ', ' +
-                    a[8] + ', ' + a[9] + ', ' + a[10] + ', ' + a[11] + ', ' +
-                    a[12] + ', ' + a[13] + ', ' + a[14] + ', ' + a[15] + ')';
-};
+function str(a) {
+  return 'mat4(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ', ' + a[4] + ', ' + a[5] + ', ' + a[6] + ', ' + a[7] + ', ' + a[8] + ', ' + a[9] + ', ' + a[10] + ', ' + a[11] + ', ' + a[12] + ', ' + a[13] + ', ' + a[14] + ', ' + a[15] + ')';
+}
 
 /**
  * Returns Frobenius norm of a mat4
@@ -17481,9 +19114,9 @@ mat4.str = function (a) {
  * @param {mat4} a the matrix to calculate Frobenius norm of
  * @returns {Number} Frobenius norm
  */
-mat4.frob = function (a) {
-    return(Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2) + Math.pow(a[4], 2) + Math.pow(a[5], 2) + Math.pow(a[6], 2) + Math.pow(a[7], 2) + Math.pow(a[8], 2) + Math.pow(a[9], 2) + Math.pow(a[10], 2) + Math.pow(a[11], 2) + Math.pow(a[12], 2) + Math.pow(a[13], 2) + Math.pow(a[14], 2) + Math.pow(a[15], 2) ))
-};
+function frob(a) {
+  return Math.sqrt(Math.pow(a[0], 2) + Math.pow(a[1], 2) + Math.pow(a[2], 2) + Math.pow(a[3], 2) + Math.pow(a[4], 2) + Math.pow(a[5], 2) + Math.pow(a[6], 2) + Math.pow(a[7], 2) + Math.pow(a[8], 2) + Math.pow(a[9], 2) + Math.pow(a[10], 2) + Math.pow(a[11], 2) + Math.pow(a[12], 2) + Math.pow(a[13], 2) + Math.pow(a[14], 2) + Math.pow(a[15], 2));
+}
 
 /**
  * Adds two mat4's
@@ -17493,25 +19126,25 @@ mat4.frob = function (a) {
  * @param {mat4} b the second operand
  * @returns {mat4} out
  */
-mat4.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    out[2] = a[2] + b[2];
-    out[3] = a[3] + b[3];
-    out[4] = a[4] + b[4];
-    out[5] = a[5] + b[5];
-    out[6] = a[6] + b[6];
-    out[7] = a[7] + b[7];
-    out[8] = a[8] + b[8];
-    out[9] = a[9] + b[9];
-    out[10] = a[10] + b[10];
-    out[11] = a[11] + b[11];
-    out[12] = a[12] + b[12];
-    out[13] = a[13] + b[13];
-    out[14] = a[14] + b[14];
-    out[15] = a[15] + b[15];
-    return out;
-};
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  out[2] = a[2] + b[2];
+  out[3] = a[3] + b[3];
+  out[4] = a[4] + b[4];
+  out[5] = a[5] + b[5];
+  out[6] = a[6] + b[6];
+  out[7] = a[7] + b[7];
+  out[8] = a[8] + b[8];
+  out[9] = a[9] + b[9];
+  out[10] = a[10] + b[10];
+  out[11] = a[11] + b[11];
+  out[12] = a[12] + b[12];
+  out[13] = a[13] + b[13];
+  out[14] = a[14] + b[14];
+  out[15] = a[15] + b[15];
+  return out;
+}
 
 /**
  * Subtracts matrix b from matrix a
@@ -17521,31 +19154,25 @@ mat4.add = function(out, a, b) {
  * @param {mat4} b the second operand
  * @returns {mat4} out
  */
-mat4.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
-    out[3] = a[3] - b[3];
-    out[4] = a[4] - b[4];
-    out[5] = a[5] - b[5];
-    out[6] = a[6] - b[6];
-    out[7] = a[7] - b[7];
-    out[8] = a[8] - b[8];
-    out[9] = a[9] - b[9];
-    out[10] = a[10] - b[10];
-    out[11] = a[11] - b[11];
-    out[12] = a[12] - b[12];
-    out[13] = a[13] - b[13];
-    out[14] = a[14] - b[14];
-    out[15] = a[15] - b[15];
-    return out;
-};
-
-/**
- * Alias for {@link mat4.subtract}
- * @function
- */
-mat4.sub = mat4.subtract;
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  out[2] = a[2] - b[2];
+  out[3] = a[3] - b[3];
+  out[4] = a[4] - b[4];
+  out[5] = a[5] - b[5];
+  out[6] = a[6] - b[6];
+  out[7] = a[7] - b[7];
+  out[8] = a[8] - b[8];
+  out[9] = a[9] - b[9];
+  out[10] = a[10] - b[10];
+  out[11] = a[11] - b[11];
+  out[12] = a[12] - b[12];
+  out[13] = a[13] - b[13];
+  out[14] = a[14] - b[14];
+  out[15] = a[15] - b[15];
+  return out;
+}
 
 /**
  * Multiply each element of the matrix by a scalar.
@@ -17555,25 +19182,25 @@ mat4.sub = mat4.subtract;
  * @param {Number} b amount to scale the matrix's elements by
  * @returns {mat4} out
  */
-mat4.multiplyScalar = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    out[2] = a[2] * b;
-    out[3] = a[3] * b;
-    out[4] = a[4] * b;
-    out[5] = a[5] * b;
-    out[6] = a[6] * b;
-    out[7] = a[7] * b;
-    out[8] = a[8] * b;
-    out[9] = a[9] * b;
-    out[10] = a[10] * b;
-    out[11] = a[11] * b;
-    out[12] = a[12] * b;
-    out[13] = a[13] * b;
-    out[14] = a[14] * b;
-    out[15] = a[15] * b;
-    return out;
-};
+function multiplyScalar(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  out[2] = a[2] * b;
+  out[3] = a[3] * b;
+  out[4] = a[4] * b;
+  out[5] = a[5] * b;
+  out[6] = a[6] * b;
+  out[7] = a[7] * b;
+  out[8] = a[8] * b;
+  out[9] = a[9] * b;
+  out[10] = a[10] * b;
+  out[11] = a[11] * b;
+  out[12] = a[12] * b;
+  out[13] = a[13] * b;
+  out[14] = a[14] * b;
+  out[15] = a[15] * b;
+  return out;
+}
 
 /**
  * Adds two mat4's after multiplying each element of the second operand by a scalar value.
@@ -17584,25 +19211,25 @@ mat4.multiplyScalar = function(out, a, b) {
  * @param {Number} scale the amount to scale b's elements by before adding
  * @returns {mat4} out
  */
-mat4.multiplyScalarAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    out[2] = a[2] + (b[2] * scale);
-    out[3] = a[3] + (b[3] * scale);
-    out[4] = a[4] + (b[4] * scale);
-    out[5] = a[5] + (b[5] * scale);
-    out[6] = a[6] + (b[6] * scale);
-    out[7] = a[7] + (b[7] * scale);
-    out[8] = a[8] + (b[8] * scale);
-    out[9] = a[9] + (b[9] * scale);
-    out[10] = a[10] + (b[10] * scale);
-    out[11] = a[11] + (b[11] * scale);
-    out[12] = a[12] + (b[12] * scale);
-    out[13] = a[13] + (b[13] * scale);
-    out[14] = a[14] + (b[14] * scale);
-    out[15] = a[15] + (b[15] * scale);
-    return out;
-};
+function multiplyScalarAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  out[2] = a[2] + b[2] * scale;
+  out[3] = a[3] + b[3] * scale;
+  out[4] = a[4] + b[4] * scale;
+  out[5] = a[5] + b[5] * scale;
+  out[6] = a[6] + b[6] * scale;
+  out[7] = a[7] + b[7] * scale;
+  out[8] = a[8] + b[8] * scale;
+  out[9] = a[9] + b[9] * scale;
+  out[10] = a[10] + b[10] * scale;
+  out[11] = a[11] + b[11] * scale;
+  out[12] = a[12] + b[12] * scale;
+  out[13] = a[13] + b[13] * scale;
+  out[14] = a[14] + b[14] * scale;
+  out[15] = a[15] + b[15] * scale;
+  return out;
+}
 
 /**
  * Returns whether or not the matrices have exactly the same elements in the same position (when compared with ===)
@@ -17611,12 +19238,9 @@ mat4.multiplyScalarAndAdd = function(out, a, b, scale) {
  * @param {mat4} b The second matrix.
  * @returns {Boolean} True if the matrices are equal, false otherwise.
  */
-mat4.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] && 
-           a[4] === b[4] && a[5] === b[5] && a[6] === b[6] && a[7] === b[7] && 
-           a[8] === b[8] && a[9] === b[9] && a[10] === b[10] && a[11] === b[11] &&
-           a[12] === b[12] && a[13] === b[13] && a[14] === b[14] && a[15] === b[15];
-};
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] && a[4] === b[4] && a[5] === b[5] && a[6] === b[6] && a[7] === b[7] && a[8] === b[8] && a[9] === b[9] && a[10] === b[10] && a[11] === b[11] && a[12] === b[12] && a[13] === b[13] && a[14] === b[14] && a[15] === b[15];
+}
 
 /**
  * Returns whether or not the matrices have approximately the same elements in the same position.
@@ -17625,40 +19249,111 @@ mat4.exactEquals = function (a, b) {
  * @param {mat4} b The second matrix.
  * @returns {Boolean} True if the matrices are equal, false otherwise.
  */
-mat4.equals = function (a, b) {
-    var a0  = a[0],  a1  = a[1],  a2  = a[2],  a3  = a[3],
-        a4  = a[4],  a5  = a[5],  a6  = a[6],  a7  = a[7], 
-        a8  = a[8],  a9  = a[9],  a10 = a[10], a11 = a[11], 
-        a12 = a[12], a13 = a[13], a14 = a[14], a15 = a[15];
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var a4 = a[4],
+      a5 = a[5],
+      a6 = a[6],
+      a7 = a[7];
+  var a8 = a[8],
+      a9 = a[9],
+      a10 = a[10],
+      a11 = a[11];
+  var a12 = a[12],
+      a13 = a[13],
+      a14 = a[14],
+      a15 = a[15];
 
-    var b0  = b[0],  b1  = b[1],  b2  = b[2],  b3  = b[3],
-        b4  = b[4],  b5  = b[5],  b6  = b[6],  b7  = b[7], 
-        b8  = b[8],  b9  = b[9],  b10 = b[10], b11 = b[11], 
-        b12 = b[12], b13 = b[13], b14 = b[14], b15 = b[15];
+  var b0 = b[0],
+      b1 = b[1],
+      b2 = b[2],
+      b3 = b[3];
+  var b4 = b[4],
+      b5 = b[5],
+      b6 = b[6],
+      b7 = b[7];
+  var b8 = b[8],
+      b9 = b[9],
+      b10 = b[10],
+      b11 = b[11];
+  var b12 = b[12],
+      b13 = b[13],
+      b14 = b[14],
+      b15 = b[15];
 
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)) &&
-            Math.abs(a2 - b2) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a2), Math.abs(b2)) &&
-            Math.abs(a3 - b3) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a3), Math.abs(b3)) &&
-            Math.abs(a4 - b4) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a4), Math.abs(b4)) &&
-            Math.abs(a5 - b5) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a5), Math.abs(b5)) &&
-            Math.abs(a6 - b6) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a6), Math.abs(b6)) &&
-            Math.abs(a7 - b7) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a7), Math.abs(b7)) &&
-            Math.abs(a8 - b8) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a8), Math.abs(b8)) &&
-            Math.abs(a9 - b9) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a9), Math.abs(b9)) &&
-            Math.abs(a10 - b10) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a10), Math.abs(b10)) &&
-            Math.abs(a11 - b11) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a11), Math.abs(b11)) &&
-            Math.abs(a12 - b12) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a12), Math.abs(b12)) &&
-            Math.abs(a13 - b13) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a13), Math.abs(b13)) &&
-            Math.abs(a14 - b14) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a14), Math.abs(b14)) &&
-            Math.abs(a15 - b15) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a15), Math.abs(b15)));
-};
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1)) && Math.abs(a2 - b2) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a2), Math.abs(b2)) && Math.abs(a3 - b3) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a3), Math.abs(b3)) && Math.abs(a4 - b4) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a4), Math.abs(b4)) && Math.abs(a5 - b5) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a5), Math.abs(b5)) && Math.abs(a6 - b6) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a6), Math.abs(b6)) && Math.abs(a7 - b7) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a7), Math.abs(b7)) && Math.abs(a8 - b8) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a8), Math.abs(b8)) && Math.abs(a9 - b9) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a9), Math.abs(b9)) && Math.abs(a10 - b10) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a10), Math.abs(b10)) && Math.abs(a11 - b11) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a11), Math.abs(b11)) && Math.abs(a12 - b12) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a12), Math.abs(b12)) && Math.abs(a13 - b13) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a13), Math.abs(b13)) && Math.abs(a14 - b14) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a14), Math.abs(b14)) && Math.abs(a15 - b15) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a15), Math.abs(b15));
+}
+
+/**
+ * Alias for {@link mat4.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Alias for {@link mat4.subtract}
+ * @function
+ */
+var sub = exports.sub = subtract;
+
+/***/ }),
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
 
 
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setAxes = exports.sqlerp = exports.rotationTo = exports.equals = exports.exactEquals = exports.normalize = exports.sqrLen = exports.squaredLength = exports.len = exports.length = exports.lerp = exports.dot = exports.scale = exports.mul = exports.add = exports.set = exports.copy = exports.fromValues = exports.clone = undefined;
+exports.create = create;
+exports.identity = identity;
+exports.setAxisAngle = setAxisAngle;
+exports.getAxisAngle = getAxisAngle;
+exports.multiply = multiply;
+exports.rotateX = rotateX;
+exports.rotateY = rotateY;
+exports.rotateZ = rotateZ;
+exports.calculateW = calculateW;
+exports.slerp = slerp;
+exports.invert = invert;
+exports.conjugate = conjugate;
+exports.fromMat3 = fromMat3;
+exports.fromEuler = fromEuler;
+exports.str = str;
 
-module.exports = mat4;
+var _common = __webpack_require__(0);
 
-},{"./common.js":26}],31:[function(require,module,exports){
+var glMatrix = _interopRequireWildcard(_common);
+
+var _mat = __webpack_require__(1);
+
+var mat3 = _interopRequireWildcard(_mat);
+
+var _vec = __webpack_require__(2);
+
+var vec3 = _interopRequireWildcard(_vec);
+
+var _vec2 = __webpack_require__(3);
+
+var vec4 = _interopRequireWildcard(_vec2);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/**
+ * Quaternion
+ * @module quat
+ */
+
+/**
+ * Creates a new identity quat
+ *
+ * @returns {quat} a new quaternion
+ */
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -17679,146 +19374,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE. */
 
-var glMatrix = require("./common.js");
-var mat3 = require("./mat3.js");
-var vec3 = require("./vec3.js");
-var vec4 = require("./vec4.js");
-
-/**
- * @class Quaternion
- * @name quat
- */
-var quat = {};
-
-/**
- * Creates a new identity quat
- *
- * @returns {quat} a new quaternion
- */
-quat.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    return out;
-};
-
-/**
- * Sets a quaternion to represent the shortest rotation from one
- * vector to another.
- *
- * Both vectors are assumed to be unit length.
- *
- * @param {quat} out the receiving quaternion.
- * @param {vec3} a the initial vector
- * @param {vec3} b the destination vector
- * @returns {quat} out
- */
-quat.rotationTo = (function() {
-    var tmpvec3 = vec3.create();
-    var xUnitVec3 = vec3.fromValues(1,0,0);
-    var yUnitVec3 = vec3.fromValues(0,1,0);
-
-    return function(out, a, b) {
-        var dot = vec3.dot(a, b);
-        if (dot < -0.999999) {
-            vec3.cross(tmpvec3, xUnitVec3, a);
-            if (vec3.length(tmpvec3) < 0.000001)
-                vec3.cross(tmpvec3, yUnitVec3, a);
-            vec3.normalize(tmpvec3, tmpvec3);
-            quat.setAxisAngle(out, tmpvec3, Math.PI);
-            return out;
-        } else if (dot > 0.999999) {
-            out[0] = 0;
-            out[1] = 0;
-            out[2] = 0;
-            out[3] = 1;
-            return out;
-        } else {
-            vec3.cross(tmpvec3, a, b);
-            out[0] = tmpvec3[0];
-            out[1] = tmpvec3[1];
-            out[2] = tmpvec3[2];
-            out[3] = 1 + dot;
-            return quat.normalize(out, out);
-        }
-    };
-})();
-
-/**
- * Sets the specified quaternion with values corresponding to the given
- * axes. Each axis is a vec3 and is expected to be unit length and
- * perpendicular to all other specified axes.
- *
- * @param {vec3} view  the vector representing the viewing direction
- * @param {vec3} right the vector representing the local "right" direction
- * @param {vec3} up    the vector representing the local "up" direction
- * @returns {quat} out
- */
-quat.setAxes = (function() {
-    var matr = mat3.create();
-
-    return function(out, view, right, up) {
-        matr[0] = right[0];
-        matr[3] = right[1];
-        matr[6] = right[2];
-
-        matr[1] = up[0];
-        matr[4] = up[1];
-        matr[7] = up[2];
-
-        matr[2] = -view[0];
-        matr[5] = -view[1];
-        matr[8] = -view[2];
-
-        return quat.normalize(out, quat.fromMat3(out, matr));
-    };
-})();
-
-/**
- * Creates a new quat initialized with values from an existing quaternion
- *
- * @param {quat} a quaternion to clone
- * @returns {quat} a new quaternion
- * @function
- */
-quat.clone = vec4.clone;
-
-/**
- * Creates a new quat initialized with the given values
- *
- * @param {Number} x X component
- * @param {Number} y Y component
- * @param {Number} z Z component
- * @param {Number} w W component
- * @returns {quat} a new quaternion
- * @function
- */
-quat.fromValues = vec4.fromValues;
-
-/**
- * Copy the values from one quat to another
- *
- * @param {quat} out the receiving quaternion
- * @param {quat} a the source quaternion
- * @returns {quat} out
- * @function
- */
-quat.copy = vec4.copy;
-
-/**
- * Set the components of a quat to the given values
- *
- * @param {quat} out the receiving quaternion
- * @param {Number} x X component
- * @param {Number} y Y component
- * @param {Number} z Z component
- * @param {Number} w W component
- * @returns {quat} out
- * @function
- */
-quat.set = vec4.set;
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(4);
+  out[0] = 0;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  return out;
+}
 
 /**
  * Set a quat to the identity quaternion
@@ -17826,13 +19389,13 @@ quat.set = vec4.set;
  * @param {quat} out the receiving quaternion
  * @returns {quat} out
  */
-quat.identity = function(out) {
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 1;
-    return out;
-};
+function identity(out) {
+  out[0] = 0;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  return out;
+}
 
 /**
  * Sets a quat from the given angle and rotation axis,
@@ -17843,15 +19406,15 @@ quat.identity = function(out) {
  * @param {Number} rad the angle in radians
  * @returns {quat} out
  **/
-quat.setAxisAngle = function(out, axis, rad) {
-    rad = rad * 0.5;
-    var s = Math.sin(rad);
-    out[0] = s * axis[0];
-    out[1] = s * axis[1];
-    out[2] = s * axis[2];
-    out[3] = Math.cos(rad);
-    return out;
-};
+function setAxisAngle(out, axis, rad) {
+  rad = rad * 0.5;
+  var s = Math.sin(rad);
+  out[0] = s * axis[0];
+  out[1] = s * axis[1];
+  out[2] = s * axis[2];
+  out[3] = Math.cos(rad);
+  return out;
+}
 
 /**
  * Gets the rotation axis and angle for a given
@@ -17866,32 +19429,21 @@ quat.setAxisAngle = function(out, axis, rad) {
  * @param  {quat} q     Quaternion to be decomposed
  * @return {Number}     Angle, in radians, of the rotation
  */
-quat.getAxisAngle = function(out_axis, q) {
-    var rad = Math.acos(q[3]) * 2.0;
-    var s = Math.sin(rad / 2.0);
-    if (s != 0.0) {
-        out_axis[0] = q[0] / s;
-        out_axis[1] = q[1] / s;
-        out_axis[2] = q[2] / s;
-    } else {
-        // If s is zero, return any axis (no rotation - axis does not matter)
-        out_axis[0] = 1;
-        out_axis[1] = 0;
-        out_axis[2] = 0;
-    }
-    return rad;
-};
-
-/**
- * Adds two quat's
- *
- * @param {quat} out the receiving quaternion
- * @param {quat} a the first operand
- * @param {quat} b the second operand
- * @returns {quat} out
- * @function
- */
-quat.add = vec4.add;
+function getAxisAngle(out_axis, q) {
+  var rad = Math.acos(q[3]) * 2.0;
+  var s = Math.sin(rad / 2.0);
+  if (s != 0.0) {
+    out_axis[0] = q[0] / s;
+    out_axis[1] = q[1] / s;
+    out_axis[2] = q[2] / s;
+  } else {
+    // If s is zero, return any axis (no rotation - axis does not matter)
+    out_axis[0] = 1;
+    out_axis[1] = 0;
+    out_axis[2] = 0;
+  }
+  return rad;
+}
 
 /**
  * Multiplies two quat's
@@ -17901,33 +19453,22 @@ quat.add = vec4.add;
  * @param {quat} b the second operand
  * @returns {quat} out
  */
-quat.multiply = function(out, a, b) {
-    var ax = a[0], ay = a[1], az = a[2], aw = a[3],
-        bx = b[0], by = b[1], bz = b[2], bw = b[3];
+function multiply(out, a, b) {
+  var ax = a[0],
+      ay = a[1],
+      az = a[2],
+      aw = a[3];
+  var bx = b[0],
+      by = b[1],
+      bz = b[2],
+      bw = b[3];
 
-    out[0] = ax * bw + aw * bx + ay * bz - az * by;
-    out[1] = ay * bw + aw * by + az * bx - ax * bz;
-    out[2] = az * bw + aw * bz + ax * by - ay * bx;
-    out[3] = aw * bw - ax * bx - ay * by - az * bz;
-    return out;
-};
-
-/**
- * Alias for {@link quat.multiply}
- * @function
- */
-quat.mul = quat.multiply;
-
-/**
- * Scales a quat by a scalar number
- *
- * @param {quat} out the receiving vector
- * @param {quat} a the vector to scale
- * @param {Number} b amount to scale the vector by
- * @returns {quat} out
- * @function
- */
-quat.scale = vec4.scale;
+  out[0] = ax * bw + aw * bx + ay * bz - az * by;
+  out[1] = ay * bw + aw * by + az * bx - ax * bz;
+  out[2] = az * bw + aw * bz + ax * by - ay * bx;
+  out[3] = aw * bw - ax * bx - ay * by - az * bz;
+  return out;
+}
 
 /**
  * Rotates a quaternion by the given angle about the X axis
@@ -17937,18 +19478,22 @@ quat.scale = vec4.scale;
  * @param {number} rad angle (in radians) to rotate
  * @returns {quat} out
  */
-quat.rotateX = function (out, a, rad) {
-    rad *= 0.5; 
+function rotateX(out, a, rad) {
+  rad *= 0.5;
 
-    var ax = a[0], ay = a[1], az = a[2], aw = a[3],
-        bx = Math.sin(rad), bw = Math.cos(rad);
+  var ax = a[0],
+      ay = a[1],
+      az = a[2],
+      aw = a[3];
+  var bx = Math.sin(rad),
+      bw = Math.cos(rad);
 
-    out[0] = ax * bw + aw * bx;
-    out[1] = ay * bw + az * bx;
-    out[2] = az * bw - ay * bx;
-    out[3] = aw * bw - ax * bx;
-    return out;
-};
+  out[0] = ax * bw + aw * bx;
+  out[1] = ay * bw + az * bx;
+  out[2] = az * bw - ay * bx;
+  out[3] = aw * bw - ax * bx;
+  return out;
+}
 
 /**
  * Rotates a quaternion by the given angle about the Y axis
@@ -17958,18 +19503,22 @@ quat.rotateX = function (out, a, rad) {
  * @param {number} rad angle (in radians) to rotate
  * @returns {quat} out
  */
-quat.rotateY = function (out, a, rad) {
-    rad *= 0.5; 
+function rotateY(out, a, rad) {
+  rad *= 0.5;
 
-    var ax = a[0], ay = a[1], az = a[2], aw = a[3],
-        by = Math.sin(rad), bw = Math.cos(rad);
+  var ax = a[0],
+      ay = a[1],
+      az = a[2],
+      aw = a[3];
+  var by = Math.sin(rad),
+      bw = Math.cos(rad);
 
-    out[0] = ax * bw - az * by;
-    out[1] = ay * bw + aw * by;
-    out[2] = az * bw + ax * by;
-    out[3] = aw * bw - ay * by;
-    return out;
-};
+  out[0] = ax * bw - az * by;
+  out[1] = ay * bw + aw * by;
+  out[2] = az * bw + ax * by;
+  out[3] = aw * bw - ay * by;
+  return out;
+}
 
 /**
  * Rotates a quaternion by the given angle about the Z axis
@@ -17979,18 +19528,22 @@ quat.rotateY = function (out, a, rad) {
  * @param {number} rad angle (in radians) to rotate
  * @returns {quat} out
  */
-quat.rotateZ = function (out, a, rad) {
-    rad *= 0.5; 
+function rotateZ(out, a, rad) {
+  rad *= 0.5;
 
-    var ax = a[0], ay = a[1], az = a[2], aw = a[3],
-        bz = Math.sin(rad), bw = Math.cos(rad);
+  var ax = a[0],
+      ay = a[1],
+      az = a[2],
+      aw = a[3];
+  var bz = Math.sin(rad),
+      bw = Math.cos(rad);
 
-    out[0] = ax * bw + ay * bz;
-    out[1] = ay * bw - ax * bz;
-    out[2] = az * bw + aw * bz;
-    out[3] = aw * bw - az * bz;
-    return out;
-};
+  out[0] = ax * bw + ay * bz;
+  out[1] = ay * bw - ax * bz;
+  out[2] = az * bw + aw * bz;
+  out[3] = aw * bw - az * bz;
+  return out;
+}
 
 /**
  * Calculates the W component of a quat from the X, Y, and Z components.
@@ -18001,37 +19554,17 @@ quat.rotateZ = function (out, a, rad) {
  * @param {quat} a quat to calculate W component of
  * @returns {quat} out
  */
-quat.calculateW = function (out, a) {
-    var x = a[0], y = a[1], z = a[2];
+function calculateW(out, a) {
+  var x = a[0],
+      y = a[1],
+      z = a[2];
 
-    out[0] = x;
-    out[1] = y;
-    out[2] = z;
-    out[3] = Math.sqrt(Math.abs(1.0 - x * x - y * y - z * z));
-    return out;
-};
-
-/**
- * Calculates the dot product of two quat's
- *
- * @param {quat} a the first operand
- * @param {quat} b the second operand
- * @returns {Number} dot product of a and b
- * @function
- */
-quat.dot = vec4.dot;
-
-/**
- * Performs a linear interpolation between two quat's
- *
- * @param {quat} out the receiving quaternion
- * @param {quat} a the first operand
- * @param {quat} b the second operand
- * @param {Number} t interpolation amount between the two inputs
- * @returns {quat} out
- * @function
- */
-quat.lerp = vec4.lerp;
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = Math.sqrt(Math.abs(1.0 - x * x - y * y - z * z));
+  return out;
+}
 
 /**
  * Performs a spherical linear interpolation between two quat
@@ -18042,70 +19575,55 @@ quat.lerp = vec4.lerp;
  * @param {Number} t interpolation amount between the two inputs
  * @returns {quat} out
  */
-quat.slerp = function (out, a, b, t) {
-    // benchmarks:
-    //    http://jsperf.com/quaternion-slerp-implementations
+function slerp(out, a, b, t) {
+  // benchmarks:
+  //    http://jsperf.com/quaternion-slerp-implementations
+  var ax = a[0],
+      ay = a[1],
+      az = a[2],
+      aw = a[3];
+  var bx = b[0],
+      by = b[1],
+      bz = b[2],
+      bw = b[3];
 
-    var ax = a[0], ay = a[1], az = a[2], aw = a[3],
-        bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  var omega = void 0,
+      cosom = void 0,
+      sinom = void 0,
+      scale0 = void 0,
+      scale1 = void 0;
 
-    var        omega, cosom, sinom, scale0, scale1;
+  // calc cosine
+  cosom = ax * bx + ay * by + az * bz + aw * bw;
+  // adjust signs (if necessary)
+  if (cosom < 0.0) {
+    cosom = -cosom;
+    bx = -bx;
+    by = -by;
+    bz = -bz;
+    bw = -bw;
+  }
+  // calculate coefficients
+  if (1.0 - cosom > 0.000001) {
+    // standard case (slerp)
+    omega = Math.acos(cosom);
+    sinom = Math.sin(omega);
+    scale0 = Math.sin((1.0 - t) * omega) / sinom;
+    scale1 = Math.sin(t * omega) / sinom;
+  } else {
+    // "from" and "to" quaternions are very close
+    //  ... so we can do a linear interpolation
+    scale0 = 1.0 - t;
+    scale1 = t;
+  }
+  // calculate final values
+  out[0] = scale0 * ax + scale1 * bx;
+  out[1] = scale0 * ay + scale1 * by;
+  out[2] = scale0 * az + scale1 * bz;
+  out[3] = scale0 * aw + scale1 * bw;
 
-    // calc cosine
-    cosom = ax * bx + ay * by + az * bz + aw * bw;
-    // adjust signs (if necessary)
-    if ( cosom < 0.0 ) {
-        cosom = -cosom;
-        bx = - bx;
-        by = - by;
-        bz = - bz;
-        bw = - bw;
-    }
-    // calculate coefficients
-    if ( (1.0 - cosom) > 0.000001 ) {
-        // standard case (slerp)
-        omega  = Math.acos(cosom);
-        sinom  = Math.sin(omega);
-        scale0 = Math.sin((1.0 - t) * omega) / sinom;
-        scale1 = Math.sin(t * omega) / sinom;
-    } else {        
-        // "from" and "to" quaternions are very close 
-        //  ... so we can do a linear interpolation
-        scale0 = 1.0 - t;
-        scale1 = t;
-    }
-    // calculate final values
-    out[0] = scale0 * ax + scale1 * bx;
-    out[1] = scale0 * ay + scale1 * by;
-    out[2] = scale0 * az + scale1 * bz;
-    out[3] = scale0 * aw + scale1 * bw;
-    
-    return out;
-};
-
-/**
- * Performs a spherical linear interpolation with two control points
- *
- * @param {quat} out the receiving quaternion
- * @param {quat} a the first operand
- * @param {quat} b the second operand
- * @param {quat} c the third operand
- * @param {quat} d the fourth operand
- * @param {Number} t interpolation amount
- * @returns {quat} out
- */
-quat.sqlerp = (function () {
-  var temp1 = quat.create();
-  var temp2 = quat.create();
-  
-  return function (out, a, b, c, d, t) {
-    quat.slerp(temp1, a, d, t);
-    quat.slerp(temp2, b, c, t);
-    quat.slerp(out, temp1, temp2, 2 * t * (1 - t));
-    
-    return out;
-  };
-}());
+  return out;
+}
 
 /**
  * Calculates the inverse of a quat
@@ -18114,19 +19632,22 @@ quat.sqlerp = (function () {
  * @param {quat} a quat to calculate inverse of
  * @returns {quat} out
  */
-quat.invert = function(out, a) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3],
-        dot = a0*a0 + a1*a1 + a2*a2 + a3*a3,
-        invDot = dot ? 1.0/dot : 0;
-    
-    // TODO: Would be faster to return [0,0,0,0] immediately if dot == 0
+function invert(out, a) {
+  var a0 = a[0],
+      a1 = a[1],
+      a2 = a[2],
+      a3 = a[3];
+  var dot = a0 * a0 + a1 * a1 + a2 * a2 + a3 * a3;
+  var invDot = dot ? 1.0 / dot : 0;
 
-    out[0] = -a0*invDot;
-    out[1] = -a1*invDot;
-    out[2] = -a2*invDot;
-    out[3] = a3*invDot;
-    return out;
-};
+  // TODO: Would be faster to return [0,0,0,0] immediately if dot == 0
+
+  out[0] = -a0 * invDot;
+  out[1] = -a1 * invDot;
+  out[2] = -a2 * invDot;
+  out[3] = a3 * invDot;
+  return out;
+}
 
 /**
  * Calculates the conjugate of a quat
@@ -18136,53 +19657,13 @@ quat.invert = function(out, a) {
  * @param {quat} a quat to calculate conjugate of
  * @returns {quat} out
  */
-quat.conjugate = function (out, a) {
-    out[0] = -a[0];
-    out[1] = -a[1];
-    out[2] = -a[2];
-    out[3] = a[3];
-    return out;
-};
-
-/**
- * Calculates the length of a quat
- *
- * @param {quat} a vector to calculate length of
- * @returns {Number} length of a
- * @function
- */
-quat.length = vec4.length;
-
-/**
- * Alias for {@link quat.length}
- * @function
- */
-quat.len = quat.length;
-
-/**
- * Calculates the squared length of a quat
- *
- * @param {quat} a vector to calculate squared length of
- * @returns {Number} squared length of a
- * @function
- */
-quat.squaredLength = vec4.squaredLength;
-
-/**
- * Alias for {@link quat.squaredLength}
- * @function
- */
-quat.sqrLen = quat.squaredLength;
-
-/**
- * Normalize a quat
- *
- * @param {quat} out the receiving quaternion
- * @param {quat} a quaternion to normalize
- * @returns {quat} out
- * @function
- */
-quat.normalize = vec4.normalize;
+function conjugate(out, a) {
+  out[0] = -a[0];
+  out[1] = -a[1];
+  out[2] = -a[2];
+  out[3] = a[3];
+  return out;
+}
 
 /**
  * Creates a quaternion from the given 3x3 rotation matrix.
@@ -18195,50 +19676,212 @@ quat.normalize = vec4.normalize;
  * @returns {quat} out
  * @function
  */
-quat.fromMat3 = function(out, m) {
-    // Algorithm in Ken Shoemake's article in 1987 SIGGRAPH course notes
-    // article "Quaternion Calculus and Fast Animation".
-    var fTrace = m[0] + m[4] + m[8];
-    var fRoot;
+function fromMat3(out, m) {
+  // Algorithm in Ken Shoemake's article in 1987 SIGGRAPH course notes
+  // article "Quaternion Calculus and Fast Animation".
+  var fTrace = m[0] + m[4] + m[8];
+  var fRoot = void 0;
 
-    if ( fTrace > 0.0 ) {
-        // |w| > 1/2, may as well choose w > 1/2
-        fRoot = Math.sqrt(fTrace + 1.0);  // 2w
-        out[3] = 0.5 * fRoot;
-        fRoot = 0.5/fRoot;  // 1/(4w)
-        out[0] = (m[5]-m[7])*fRoot;
-        out[1] = (m[6]-m[2])*fRoot;
-        out[2] = (m[1]-m[3])*fRoot;
-    } else {
-        // |w| <= 1/2
-        var i = 0;
-        if ( m[4] > m[0] )
-          i = 1;
-        if ( m[8] > m[i*3+i] )
-          i = 2;
-        var j = (i+1)%3;
-        var k = (i+2)%3;
-        
-        fRoot = Math.sqrt(m[i*3+i]-m[j*3+j]-m[k*3+k] + 1.0);
-        out[i] = 0.5 * fRoot;
-        fRoot = 0.5 / fRoot;
-        out[3] = (m[j*3+k] - m[k*3+j]) * fRoot;
-        out[j] = (m[j*3+i] + m[i*3+j]) * fRoot;
-        out[k] = (m[k*3+i] + m[i*3+k]) * fRoot;
-    }
-    
-    return out;
-};
+  if (fTrace > 0.0) {
+    // |w| > 1/2, may as well choose w > 1/2
+    fRoot = Math.sqrt(fTrace + 1.0); // 2w
+    out[3] = 0.5 * fRoot;
+    fRoot = 0.5 / fRoot; // 1/(4w)
+    out[0] = (m[5] - m[7]) * fRoot;
+    out[1] = (m[6] - m[2]) * fRoot;
+    out[2] = (m[1] - m[3]) * fRoot;
+  } else {
+    // |w| <= 1/2
+    var i = 0;
+    if (m[4] > m[0]) i = 1;
+    if (m[8] > m[i * 3 + i]) i = 2;
+    var j = (i + 1) % 3;
+    var k = (i + 2) % 3;
+
+    fRoot = Math.sqrt(m[i * 3 + i] - m[j * 3 + j] - m[k * 3 + k] + 1.0);
+    out[i] = 0.5 * fRoot;
+    fRoot = 0.5 / fRoot;
+    out[3] = (m[j * 3 + k] - m[k * 3 + j]) * fRoot;
+    out[j] = (m[j * 3 + i] + m[i * 3 + j]) * fRoot;
+    out[k] = (m[k * 3 + i] + m[i * 3 + k]) * fRoot;
+  }
+
+  return out;
+}
+
+/**
+ * Creates a quaternion from the given euler angle x, y, z.
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {x} Angle to rotate around X axis in degrees.
+ * @param {y} Angle to rotate around Y axis in degrees.
+ * @param {z} Angle to rotate around Z axis in degrees.
+ * @returns {quat} out
+ * @function
+ */
+function fromEuler(out, x, y, z) {
+  var halfToRad = 0.5 * Math.PI / 180.0;
+  x *= halfToRad;
+  y *= halfToRad;
+  z *= halfToRad;
+
+  var sx = Math.sin(x);
+  var cx = Math.cos(x);
+  var sy = Math.sin(y);
+  var cy = Math.cos(y);
+  var sz = Math.sin(z);
+  var cz = Math.cos(z);
+
+  out[0] = sx * cy * cz - cx * sy * sz;
+  out[1] = cx * sy * cz + sx * cy * sz;
+  out[2] = cx * cy * sz - sx * sy * cz;
+  out[3] = cx * cy * cz + sx * sy * sz;
+
+  return out;
+}
 
 /**
  * Returns a string representation of a quatenion
  *
- * @param {quat} vec vector to represent as a string
+ * @param {quat} a vector to represent as a string
  * @returns {String} string representation of the vector
  */
-quat.str = function (a) {
-    return 'quat(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ')';
-};
+function str(a) {
+  return 'quat(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ')';
+}
+
+/**
+ * Creates a new quat initialized with values from an existing quaternion
+ *
+ * @param {quat} a quaternion to clone
+ * @returns {quat} a new quaternion
+ * @function
+ */
+var clone = exports.clone = vec4.clone;
+
+/**
+ * Creates a new quat initialized with the given values
+ *
+ * @param {Number} x X component
+ * @param {Number} y Y component
+ * @param {Number} z Z component
+ * @param {Number} w W component
+ * @returns {quat} a new quaternion
+ * @function
+ */
+var fromValues = exports.fromValues = vec4.fromValues;
+
+/**
+ * Copy the values from one quat to another
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {quat} a the source quaternion
+ * @returns {quat} out
+ * @function
+ */
+var copy = exports.copy = vec4.copy;
+
+/**
+ * Set the components of a quat to the given values
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {Number} x X component
+ * @param {Number} y Y component
+ * @param {Number} z Z component
+ * @param {Number} w W component
+ * @returns {quat} out
+ * @function
+ */
+var set = exports.set = vec4.set;
+
+/**
+ * Adds two quat's
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {quat} a the first operand
+ * @param {quat} b the second operand
+ * @returns {quat} out
+ * @function
+ */
+var add = exports.add = vec4.add;
+
+/**
+ * Alias for {@link quat.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Scales a quat by a scalar number
+ *
+ * @param {quat} out the receiving vector
+ * @param {quat} a the vector to scale
+ * @param {Number} b amount to scale the vector by
+ * @returns {quat} out
+ * @function
+ */
+var scale = exports.scale = vec4.scale;
+
+/**
+ * Calculates the dot product of two quat's
+ *
+ * @param {quat} a the first operand
+ * @param {quat} b the second operand
+ * @returns {Number} dot product of a and b
+ * @function
+ */
+var dot = exports.dot = vec4.dot;
+
+/**
+ * Performs a linear interpolation between two quat's
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {quat} a the first operand
+ * @param {quat} b the second operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {quat} out
+ * @function
+ */
+var lerp = exports.lerp = vec4.lerp;
+
+/**
+ * Calculates the length of a quat
+ *
+ * @param {quat} a vector to calculate length of
+ * @returns {Number} length of a
+ */
+var length = exports.length = vec4.length;
+
+/**
+ * Alias for {@link quat.length}
+ * @function
+ */
+var len = exports.len = length;
+
+/**
+ * Calculates the squared length of a quat
+ *
+ * @param {quat} a vector to calculate squared length of
+ * @returns {Number} squared length of a
+ * @function
+ */
+var squaredLength = exports.squaredLength = vec4.squaredLength;
+
+/**
+ * Alias for {@link quat.squaredLength}
+ * @function
+ */
+var sqrLen = exports.sqrLen = squaredLength;
+
+/**
+ * Normalize a quat
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {quat} a quaternion to normalize
+ * @returns {quat} out
+ * @function
+ */
+var normalize = exports.normalize = vec4.normalize;
 
 /**
  * Returns whether or not the quaternions have exactly the same elements in the same position (when compared with ===)
@@ -18247,7 +19890,7 @@ quat.str = function (a) {
  * @param {quat} b The second quaternion.
  * @returns {Boolean} True if the vectors are equal, false otherwise.
  */
-quat.exactEquals = vec4.exactEquals;
+var exactEquals = exports.exactEquals = vec4.exactEquals;
 
 /**
  * Returns whether or not the quaternions have approximately the same elements in the same position.
@@ -18256,11 +19899,178 @@ quat.exactEquals = vec4.exactEquals;
  * @param {quat} b The second vector.
  * @returns {Boolean} True if the vectors are equal, false otherwise.
  */
-quat.equals = vec4.equals;
+var equals = exports.equals = vec4.equals;
 
-module.exports = quat;
+/**
+ * Sets a quaternion to represent the shortest rotation from one
+ * vector to another.
+ *
+ * Both vectors are assumed to be unit length.
+ *
+ * @param {quat} out the receiving quaternion.
+ * @param {vec3} a the initial vector
+ * @param {vec3} b the destination vector
+ * @returns {quat} out
+ */
+var rotationTo = exports.rotationTo = function () {
+  var tmpvec3 = vec3.create();
+  var xUnitVec3 = vec3.fromValues(1, 0, 0);
+  var yUnitVec3 = vec3.fromValues(0, 1, 0);
 
-},{"./common.js":26,"./mat3.js":29,"./vec3.js":33,"./vec4.js":34}],32:[function(require,module,exports){
+  return function (out, a, b) {
+    var dot = vec3.dot(a, b);
+    if (dot < -0.999999) {
+      vec3.cross(tmpvec3, xUnitVec3, a);
+      if (vec3.len(tmpvec3) < 0.000001) vec3.cross(tmpvec3, yUnitVec3, a);
+      vec3.normalize(tmpvec3, tmpvec3);
+      setAxisAngle(out, tmpvec3, Math.PI);
+      return out;
+    } else if (dot > 0.999999) {
+      out[0] = 0;
+      out[1] = 0;
+      out[2] = 0;
+      out[3] = 1;
+      return out;
+    } else {
+      vec3.cross(tmpvec3, a, b);
+      out[0] = tmpvec3[0];
+      out[1] = tmpvec3[1];
+      out[2] = tmpvec3[2];
+      out[3] = 1 + dot;
+      return normalize(out, out);
+    }
+  };
+}();
+
+/**
+ * Performs a spherical linear interpolation with two control points
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {quat} a the first operand
+ * @param {quat} b the second operand
+ * @param {quat} c the third operand
+ * @param {quat} d the fourth operand
+ * @param {Number} t interpolation amount
+ * @returns {quat} out
+ */
+var sqlerp = exports.sqlerp = function () {
+  var temp1 = create();
+  var temp2 = create();
+
+  return function (out, a, b, c, d, t) {
+    slerp(temp1, a, d, t);
+    slerp(temp2, b, c, t);
+    slerp(out, temp1, temp2, 2 * t * (1 - t));
+
+    return out;
+  };
+}();
+
+/**
+ * Sets the specified quaternion with values corresponding to the given
+ * axes. Each axis is a vec3 and is expected to be unit length and
+ * perpendicular to all other specified axes.
+ *
+ * @param {vec3} view  the vector representing the viewing direction
+ * @param {vec3} right the vector representing the local "right" direction
+ * @param {vec3} up    the vector representing the local "up" direction
+ * @returns {quat} out
+ */
+var setAxes = exports.setAxes = function () {
+  var matr = mat3.create();
+
+  return function (out, view, right, up) {
+    matr[0] = right[0];
+    matr[3] = right[1];
+    matr[6] = right[2];
+
+    matr[1] = up[0];
+    matr[4] = up[1];
+    matr[7] = up[2];
+
+    matr[2] = -view[0];
+    matr[5] = -view[1];
+    matr[8] = -view[2];
+
+    return normalize(out, fromMat3(out, matr));
+  };
+}();
+
+/***/ }),
+/* 9 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.forEach = exports.sqrLen = exports.sqrDist = exports.dist = exports.div = exports.mul = exports.sub = exports.len = undefined;
+exports.create = create;
+exports.clone = clone;
+exports.fromValues = fromValues;
+exports.copy = copy;
+exports.set = set;
+exports.add = add;
+exports.subtract = subtract;
+exports.multiply = multiply;
+exports.divide = divide;
+exports.ceil = ceil;
+exports.floor = floor;
+exports.min = min;
+exports.max = max;
+exports.round = round;
+exports.scale = scale;
+exports.scaleAndAdd = scaleAndAdd;
+exports.distance = distance;
+exports.squaredDistance = squaredDistance;
+exports.length = length;
+exports.squaredLength = squaredLength;
+exports.negate = negate;
+exports.inverse = inverse;
+exports.normalize = normalize;
+exports.dot = dot;
+exports.cross = cross;
+exports.lerp = lerp;
+exports.random = random;
+exports.transformMat2 = transformMat2;
+exports.transformMat2d = transformMat2d;
+exports.transformMat3 = transformMat3;
+exports.transformMat4 = transformMat4;
+exports.str = str;
+exports.exactEquals = exactEquals;
+exports.equals = equals;
+
+var _common = __webpack_require__(0);
+
+var glMatrix = _interopRequireWildcard(_common);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/**
+ * 2 Dimensional Vector
+ * @module vec2
+ */
+
+/**
+ * Creates a new, empty vec2
+ *
+ * @returns {vec2} a new 2D vector
+ */
+function create() {
+  var out = new glMatrix.ARRAY_TYPE(2);
+  out[0] = 0;
+  out[1] = 0;
+  return out;
+}
+
+/**
+ * Creates a new vec2 initialized with values from an existing vector
+ *
+ * @param {vec2} a vector to clone
+ * @returns {vec2} a new 2D vector
+ */
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18281,38 +20091,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE. */
 
-var glMatrix = require("./common.js");
-
-/**
- * @class 2 Dimensional Vector
- * @name vec2
- */
-var vec2 = {};
-
-/**
- * Creates a new, empty vec2
- *
- * @returns {vec2} a new 2D vector
- */
-vec2.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(2);
-    out[0] = 0;
-    out[1] = 0;
-    return out;
-};
-
-/**
- * Creates a new vec2 initialized with values from an existing vector
- *
- * @param {vec2} a vector to clone
- * @returns {vec2} a new 2D vector
- */
-vec2.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(2);
-    out[0] = a[0];
-    out[1] = a[1];
-    return out;
-};
+function clone(a) {
+  var out = new glMatrix.ARRAY_TYPE(2);
+  out[0] = a[0];
+  out[1] = a[1];
+  return out;
+}
 
 /**
  * Creates a new vec2 initialized with the given values
@@ -18321,12 +20105,12 @@ vec2.clone = function(a) {
  * @param {Number} y Y component
  * @returns {vec2} a new 2D vector
  */
-vec2.fromValues = function(x, y) {
-    var out = new glMatrix.ARRAY_TYPE(2);
-    out[0] = x;
-    out[1] = y;
-    return out;
-};
+function fromValues(x, y) {
+  var out = new glMatrix.ARRAY_TYPE(2);
+  out[0] = x;
+  out[1] = y;
+  return out;
+}
 
 /**
  * Copy the values from one vec2 to another
@@ -18335,11 +20119,11 @@ vec2.fromValues = function(x, y) {
  * @param {vec2} a the source vector
  * @returns {vec2} out
  */
-vec2.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    return out;
-};
+function copy(out, a) {
+  out[0] = a[0];
+  out[1] = a[1];
+  return out;
+}
 
 /**
  * Set the components of a vec2 to the given values
@@ -18349,11 +20133,11 @@ vec2.copy = function(out, a) {
  * @param {Number} y Y component
  * @returns {vec2} out
  */
-vec2.set = function(out, x, y) {
-    out[0] = x;
-    out[1] = y;
-    return out;
-};
+function set(out, x, y) {
+  out[0] = x;
+  out[1] = y;
+  return out;
+}
 
 /**
  * Adds two vec2's
@@ -18363,11 +20147,11 @@ vec2.set = function(out, x, y) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-vec2.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    return out;
-};
+function add(out, a, b) {
+  out[0] = a[0] + b[0];
+  out[1] = a[1] + b[1];
+  return out;
+}
 
 /**
  * Subtracts vector b from vector a
@@ -18377,17 +20161,11 @@ vec2.add = function(out, a, b) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-vec2.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    return out;
-};
-
-/**
- * Alias for {@link vec2.subtract}
- * @function
- */
-vec2.sub = vec2.subtract;
+function subtract(out, a, b) {
+  out[0] = a[0] - b[0];
+  out[1] = a[1] - b[1];
+  return out;
+}
 
 /**
  * Multiplies two vec2's
@@ -18397,17 +20175,11 @@ vec2.sub = vec2.subtract;
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-vec2.multiply = function(out, a, b) {
-    out[0] = a[0] * b[0];
-    out[1] = a[1] * b[1];
-    return out;
+function multiply(out, a, b) {
+  out[0] = a[0] * b[0];
+  out[1] = a[1] * b[1];
+  return out;
 };
-
-/**
- * Alias for {@link vec2.multiply}
- * @function
- */
-vec2.mul = vec2.multiply;
 
 /**
  * Divides two vec2's
@@ -18417,17 +20189,11 @@ vec2.mul = vec2.multiply;
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-vec2.divide = function(out, a, b) {
-    out[0] = a[0] / b[0];
-    out[1] = a[1] / b[1];
-    return out;
+function divide(out, a, b) {
+  out[0] = a[0] / b[0];
+  out[1] = a[1] / b[1];
+  return out;
 };
-
-/**
- * Alias for {@link vec2.divide}
- * @function
- */
-vec2.div = vec2.divide;
 
 /**
  * Math.ceil the components of a vec2
@@ -18436,10 +20202,10 @@ vec2.div = vec2.divide;
  * @param {vec2} a vector to ceil
  * @returns {vec2} out
  */
-vec2.ceil = function (out, a) {
-    out[0] = Math.ceil(a[0]);
-    out[1] = Math.ceil(a[1]);
-    return out;
+function ceil(out, a) {
+  out[0] = Math.ceil(a[0]);
+  out[1] = Math.ceil(a[1]);
+  return out;
 };
 
 /**
@@ -18449,10 +20215,10 @@ vec2.ceil = function (out, a) {
  * @param {vec2} a vector to floor
  * @returns {vec2} out
  */
-vec2.floor = function (out, a) {
-    out[0] = Math.floor(a[0]);
-    out[1] = Math.floor(a[1]);
-    return out;
+function floor(out, a) {
+  out[0] = Math.floor(a[0]);
+  out[1] = Math.floor(a[1]);
+  return out;
 };
 
 /**
@@ -18463,10 +20229,10 @@ vec2.floor = function (out, a) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-vec2.min = function(out, a, b) {
-    out[0] = Math.min(a[0], b[0]);
-    out[1] = Math.min(a[1], b[1]);
-    return out;
+function min(out, a, b) {
+  out[0] = Math.min(a[0], b[0]);
+  out[1] = Math.min(a[1], b[1]);
+  return out;
 };
 
 /**
@@ -18477,10 +20243,10 @@ vec2.min = function(out, a, b) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-vec2.max = function(out, a, b) {
-    out[0] = Math.max(a[0], b[0]);
-    out[1] = Math.max(a[1], b[1]);
-    return out;
+function max(out, a, b) {
+  out[0] = Math.max(a[0], b[0]);
+  out[1] = Math.max(a[1], b[1]);
+  return out;
 };
 
 /**
@@ -18490,10 +20256,10 @@ vec2.max = function(out, a, b) {
  * @param {vec2} a vector to round
  * @returns {vec2} out
  */
-vec2.round = function (out, a) {
-    out[0] = Math.round(a[0]);
-    out[1] = Math.round(a[1]);
-    return out;
+function round(out, a) {
+  out[0] = Math.round(a[0]);
+  out[1] = Math.round(a[1]);
+  return out;
 };
 
 /**
@@ -18504,10 +20270,10 @@ vec2.round = function (out, a) {
  * @param {Number} b amount to scale the vector by
  * @returns {vec2} out
  */
-vec2.scale = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    return out;
+function scale(out, a, b) {
+  out[0] = a[0] * b;
+  out[1] = a[1] * b;
+  return out;
 };
 
 /**
@@ -18519,10 +20285,10 @@ vec2.scale = function(out, a, b) {
  * @param {Number} scale the amount to scale b by before adding
  * @returns {vec2} out
  */
-vec2.scaleAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    return out;
+function scaleAndAdd(out, a, b, scale) {
+  out[0] = a[0] + b[0] * scale;
+  out[1] = a[1] + b[1] * scale;
+  return out;
 };
 
 /**
@@ -18532,17 +20298,11 @@ vec2.scaleAndAdd = function(out, a, b, scale) {
  * @param {vec2} b the second operand
  * @returns {Number} distance between a and b
  */
-vec2.distance = function(a, b) {
-    var x = b[0] - a[0],
-        y = b[1] - a[1];
-    return Math.sqrt(x*x + y*y);
+function distance(a, b) {
+  var x = b[0] - a[0],
+      y = b[1] - a[1];
+  return Math.sqrt(x * x + y * y);
 };
-
-/**
- * Alias for {@link vec2.distance}
- * @function
- */
-vec2.dist = vec2.distance;
 
 /**
  * Calculates the squared euclidian distance between two vec2's
@@ -18551,17 +20311,11 @@ vec2.dist = vec2.distance;
  * @param {vec2} b the second operand
  * @returns {Number} squared distance between a and b
  */
-vec2.squaredDistance = function(a, b) {
-    var x = b[0] - a[0],
-        y = b[1] - a[1];
-    return x*x + y*y;
+function squaredDistance(a, b) {
+  var x = b[0] - a[0],
+      y = b[1] - a[1];
+  return x * x + y * y;
 };
-
-/**
- * Alias for {@link vec2.squaredDistance}
- * @function
- */
-vec2.sqrDist = vec2.squaredDistance;
 
 /**
  * Calculates the length of a vec2
@@ -18569,17 +20323,11 @@ vec2.sqrDist = vec2.squaredDistance;
  * @param {vec2} a vector to calculate length of
  * @returns {Number} length of a
  */
-vec2.length = function (a) {
-    var x = a[0],
-        y = a[1];
-    return Math.sqrt(x*x + y*y);
+function length(a) {
+  var x = a[0],
+      y = a[1];
+  return Math.sqrt(x * x + y * y);
 };
-
-/**
- * Alias for {@link vec2.length}
- * @function
- */
-vec2.len = vec2.length;
 
 /**
  * Calculates the squared length of a vec2
@@ -18587,17 +20335,11 @@ vec2.len = vec2.length;
  * @param {vec2} a vector to calculate squared length of
  * @returns {Number} squared length of a
  */
-vec2.squaredLength = function (a) {
-    var x = a[0],
-        y = a[1];
-    return x*x + y*y;
+function squaredLength(a) {
+  var x = a[0],
+      y = a[1];
+  return x * x + y * y;
 };
-
-/**
- * Alias for {@link vec2.squaredLength}
- * @function
- */
-vec2.sqrLen = vec2.squaredLength;
 
 /**
  * Negates the components of a vec2
@@ -18606,10 +20348,10 @@ vec2.sqrLen = vec2.squaredLength;
  * @param {vec2} a vector to negate
  * @returns {vec2} out
  */
-vec2.negate = function(out, a) {
-    out[0] = -a[0];
-    out[1] = -a[1];
-    return out;
+function negate(out, a) {
+  out[0] = -a[0];
+  out[1] = -a[1];
+  return out;
 };
 
 /**
@@ -18619,7 +20361,7 @@ vec2.negate = function(out, a) {
  * @param {vec2} a vector to invert
  * @returns {vec2} out
  */
-vec2.inverse = function(out, a) {
+function inverse(out, a) {
   out[0] = 1.0 / a[0];
   out[1] = 1.0 / a[1];
   return out;
@@ -18632,17 +20374,17 @@ vec2.inverse = function(out, a) {
  * @param {vec2} a vector to normalize
  * @returns {vec2} out
  */
-vec2.normalize = function(out, a) {
-    var x = a[0],
-        y = a[1];
-    var len = x*x + y*y;
-    if (len > 0) {
-        //TODO: evaluate use of glm_invsqrt here?
-        len = 1 / Math.sqrt(len);
-        out[0] = a[0] * len;
-        out[1] = a[1] * len;
-    }
-    return out;
+function normalize(out, a) {
+  var x = a[0],
+      y = a[1];
+  var len = x * x + y * y;
+  if (len > 0) {
+    //TODO: evaluate use of glm_invsqrt here?
+    len = 1 / Math.sqrt(len);
+    out[0] = a[0] * len;
+    out[1] = a[1] * len;
+  }
+  return out;
 };
 
 /**
@@ -18652,8 +20394,8 @@ vec2.normalize = function(out, a) {
  * @param {vec2} b the second operand
  * @returns {Number} dot product of a and b
  */
-vec2.dot = function (a, b) {
-    return a[0] * b[0] + a[1] * b[1];
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1];
 };
 
 /**
@@ -18665,11 +20407,11 @@ vec2.dot = function (a, b) {
  * @param {vec2} b the second operand
  * @returns {vec3} out
  */
-vec2.cross = function(out, a, b) {
-    var z = a[0] * b[1] - a[1] * b[0];
-    out[0] = out[1] = 0;
-    out[2] = z;
-    return out;
+function cross(out, a, b) {
+  var z = a[0] * b[1] - a[1] * b[0];
+  out[0] = out[1] = 0;
+  out[2] = z;
+  return out;
 };
 
 /**
@@ -18681,12 +20423,12 @@ vec2.cross = function(out, a, b) {
  * @param {Number} t interpolation amount between the two inputs
  * @returns {vec2} out
  */
-vec2.lerp = function (out, a, b, t) {
-    var ax = a[0],
-        ay = a[1];
-    out[0] = ax + t * (b[0] - ax);
-    out[1] = ay + t * (b[1] - ay);
-    return out;
+function lerp(out, a, b, t) {
+  var ax = a[0],
+      ay = a[1];
+  out[0] = ax + t * (b[0] - ax);
+  out[1] = ay + t * (b[1] - ay);
+  return out;
 };
 
 /**
@@ -18696,12 +20438,12 @@ vec2.lerp = function (out, a, b, t) {
  * @param {Number} [scale] Length of the resulting vector. If ommitted, a unit vector will be returned
  * @returns {vec2} out
  */
-vec2.random = function (out, scale) {
-    scale = scale || 1.0;
-    var r = glMatrix.RANDOM() * 2.0 * Math.PI;
-    out[0] = Math.cos(r) * scale;
-    out[1] = Math.sin(r) * scale;
-    return out;
+function random(out, scale) {
+  scale = scale || 1.0;
+  var r = glMatrix.RANDOM() * 2.0 * Math.PI;
+  out[0] = Math.cos(r) * scale;
+  out[1] = Math.sin(r) * scale;
+  return out;
 };
 
 /**
@@ -18712,12 +20454,12 @@ vec2.random = function (out, scale) {
  * @param {mat2} m matrix to transform with
  * @returns {vec2} out
  */
-vec2.transformMat2 = function(out, a, m) {
-    var x = a[0],
-        y = a[1];
-    out[0] = m[0] * x + m[2] * y;
-    out[1] = m[1] * x + m[3] * y;
-    return out;
+function transformMat2(out, a, m) {
+  var x = a[0],
+      y = a[1];
+  out[0] = m[0] * x + m[2] * y;
+  out[1] = m[1] * x + m[3] * y;
+  return out;
 };
 
 /**
@@ -18728,12 +20470,12 @@ vec2.transformMat2 = function(out, a, m) {
  * @param {mat2d} m matrix to transform with
  * @returns {vec2} out
  */
-vec2.transformMat2d = function(out, a, m) {
-    var x = a[0],
-        y = a[1];
-    out[0] = m[0] * x + m[2] * y + m[4];
-    out[1] = m[1] * x + m[3] * y + m[5];
-    return out;
+function transformMat2d(out, a, m) {
+  var x = a[0],
+      y = a[1];
+  out[0] = m[0] * x + m[2] * y + m[4];
+  out[1] = m[1] * x + m[3] * y + m[5];
+  return out;
 };
 
 /**
@@ -18745,12 +20487,12 @@ vec2.transformMat2d = function(out, a, m) {
  * @param {mat3} m matrix to transform with
  * @returns {vec2} out
  */
-vec2.transformMat3 = function(out, a, m) {
-    var x = a[0],
-        y = a[1];
-    out[0] = m[0] * x + m[3] * y + m[6];
-    out[1] = m[1] * x + m[4] * y + m[7];
-    return out;
+function transformMat3(out, a, m) {
+  var x = a[0],
+      y = a[1];
+  out[0] = m[0] * x + m[3] * y + m[6];
+  out[1] = m[1] * x + m[4] * y + m[7];
+  return out;
 };
 
 /**
@@ -18763,13 +20505,91 @@ vec2.transformMat3 = function(out, a, m) {
  * @param {mat4} m matrix to transform with
  * @returns {vec2} out
  */
-vec2.transformMat4 = function(out, a, m) {
-    var x = a[0], 
-        y = a[1];
-    out[0] = m[0] * x + m[4] * y + m[12];
-    out[1] = m[1] * x + m[5] * y + m[13];
-    return out;
-};
+function transformMat4(out, a, m) {
+  var x = a[0];
+  var y = a[1];
+  out[0] = m[0] * x + m[4] * y + m[12];
+  out[1] = m[1] * x + m[5] * y + m[13];
+  return out;
+}
+
+/**
+ * Returns a string representation of a vector
+ *
+ * @param {vec2} a vector to represent as a string
+ * @returns {String} string representation of the vector
+ */
+function str(a) {
+  return 'vec2(' + a[0] + ', ' + a[1] + ')';
+}
+
+/**
+ * Returns whether or not the vectors exactly have the same elements in the same position (when compared with ===)
+ *
+ * @param {vec2} a The first vector.
+ * @param {vec2} b The second vector.
+ * @returns {Boolean} True if the vectors are equal, false otherwise.
+ */
+function exactEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+/**
+ * Returns whether or not the vectors have approximately the same elements in the same position.
+ *
+ * @param {vec2} a The first vector.
+ * @param {vec2} b The second vector.
+ * @returns {Boolean} True if the vectors are equal, false otherwise.
+ */
+function equals(a, b) {
+  var a0 = a[0],
+      a1 = a[1];
+  var b0 = b[0],
+      b1 = b[1];
+  return Math.abs(a0 - b0) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a0), Math.abs(b0)) && Math.abs(a1 - b1) <= glMatrix.EPSILON * Math.max(1.0, Math.abs(a1), Math.abs(b1));
+}
+
+/**
+ * Alias for {@link vec2.length}
+ * @function
+ */
+var len = exports.len = length;
+
+/**
+ * Alias for {@link vec2.subtract}
+ * @function
+ */
+var sub = exports.sub = subtract;
+
+/**
+ * Alias for {@link vec2.multiply}
+ * @function
+ */
+var mul = exports.mul = multiply;
+
+/**
+ * Alias for {@link vec2.divide}
+ * @function
+ */
+var div = exports.div = divide;
+
+/**
+ * Alias for {@link vec2.distance}
+ * @function
+ */
+var dist = exports.dist = distance;
+
+/**
+ * Alias for {@link vec2.squaredDistance}
+ * @function
+ */
+var sqrDist = exports.sqrDist = squaredDistance;
+
+/**
+ * Alias for {@link vec2.squaredLength}
+ * @function
+ */
+var sqrLen = exports.sqrLen = squaredLength;
 
 /**
  * Perform some operation over an array of vec2s.
@@ -18783,1463 +20603,40 @@ vec2.transformMat4 = function(out, a, m) {
  * @returns {Array} a
  * @function
  */
-vec2.forEach = (function() {
-    var vec = vec2.create();
+var forEach = exports.forEach = function () {
+  var vec = create();
 
-    return function(a, stride, offset, count, fn, arg) {
-        var i, l;
-        if(!stride) {
-            stride = 2;
-        }
-
-        if(!offset) {
-            offset = 0;
-        }
-        
-        if(count) {
-            l = Math.min((count * stride) + offset, a.length);
-        } else {
-            l = a.length;
-        }
-
-        for(i = offset; i < l; i += stride) {
-            vec[0] = a[i]; vec[1] = a[i+1];
-            fn(vec, vec, arg);
-            a[i] = vec[0]; a[i+1] = vec[1];
-        }
-        
-        return a;
-    };
-})();
-
-/**
- * Returns a string representation of a vector
- *
- * @param {vec2} vec vector to represent as a string
- * @returns {String} string representation of the vector
- */
-vec2.str = function (a) {
-    return 'vec2(' + a[0] + ', ' + a[1] + ')';
-};
-
-/**
- * Returns whether or not the vectors exactly have the same elements in the same position (when compared with ===)
- *
- * @param {vec2} a The first vector.
- * @param {vec2} b The second vector.
- * @returns {Boolean} True if the vectors are equal, false otherwise.
- */
-vec2.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1];
-};
-
-/**
- * Returns whether or not the vectors have approximately the same elements in the same position.
- *
- * @param {vec2} a The first vector.
- * @param {vec2} b The second vector.
- * @returns {Boolean} True if the vectors are equal, false otherwise.
- */
-vec2.equals = function (a, b) {
-    var a0 = a[0], a1 = a[1];
-    var b0 = b[0], b1 = b[1];
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)));
-};
-
-module.exports = vec2;
-
-},{"./common.js":26}],33:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
-
-var glMatrix = require("./common.js");
-
-/**
- * @class 3 Dimensional Vector
- * @name vec3
- */
-var vec3 = {};
-
-/**
- * Creates a new, empty vec3
- *
- * @returns {vec3} a new 3D vector
- */
-vec3.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(3);
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = 0;
-    return out;
-};
-
-/**
- * Creates a new vec3 initialized with values from an existing vector
- *
- * @param {vec3} a vector to clone
- * @returns {vec3} a new 3D vector
- */
-vec3.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(3);
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    return out;
-};
-
-/**
- * Creates a new vec3 initialized with the given values
- *
- * @param {Number} x X component
- * @param {Number} y Y component
- * @param {Number} z Z component
- * @returns {vec3} a new 3D vector
- */
-vec3.fromValues = function(x, y, z) {
-    var out = new glMatrix.ARRAY_TYPE(3);
-    out[0] = x;
-    out[1] = y;
-    out[2] = z;
-    return out;
-};
-
-/**
- * Copy the values from one vec3 to another
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the source vector
- * @returns {vec3} out
- */
-vec3.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    return out;
-};
-
-/**
- * Set the components of a vec3 to the given values
- *
- * @param {vec3} out the receiving vector
- * @param {Number} x X component
- * @param {Number} y Y component
- * @param {Number} z Z component
- * @returns {vec3} out
- */
-vec3.set = function(out, x, y, z) {
-    out[0] = x;
-    out[1] = y;
-    out[2] = z;
-    return out;
-};
-
-/**
- * Adds two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    out[2] = a[2] + b[2];
-    return out;
-};
-
-/**
- * Subtracts vector b from vector a
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
-    return out;
-};
-
-/**
- * Alias for {@link vec3.subtract}
- * @function
- */
-vec3.sub = vec3.subtract;
-
-/**
- * Multiplies two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.multiply = function(out, a, b) {
-    out[0] = a[0] * b[0];
-    out[1] = a[1] * b[1];
-    out[2] = a[2] * b[2];
-    return out;
-};
-
-/**
- * Alias for {@link vec3.multiply}
- * @function
- */
-vec3.mul = vec3.multiply;
-
-/**
- * Divides two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.divide = function(out, a, b) {
-    out[0] = a[0] / b[0];
-    out[1] = a[1] / b[1];
-    out[2] = a[2] / b[2];
-    return out;
-};
-
-/**
- * Alias for {@link vec3.divide}
- * @function
- */
-vec3.div = vec3.divide;
-
-/**
- * Math.ceil the components of a vec3
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a vector to ceil
- * @returns {vec3} out
- */
-vec3.ceil = function (out, a) {
-    out[0] = Math.ceil(a[0]);
-    out[1] = Math.ceil(a[1]);
-    out[2] = Math.ceil(a[2]);
-    return out;
-};
-
-/**
- * Math.floor the components of a vec3
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a vector to floor
- * @returns {vec3} out
- */
-vec3.floor = function (out, a) {
-    out[0] = Math.floor(a[0]);
-    out[1] = Math.floor(a[1]);
-    out[2] = Math.floor(a[2]);
-    return out;
-};
-
-/**
- * Returns the minimum of two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.min = function(out, a, b) {
-    out[0] = Math.min(a[0], b[0]);
-    out[1] = Math.min(a[1], b[1]);
-    out[2] = Math.min(a[2], b[2]);
-    return out;
-};
-
-/**
- * Returns the maximum of two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.max = function(out, a, b) {
-    out[0] = Math.max(a[0], b[0]);
-    out[1] = Math.max(a[1], b[1]);
-    out[2] = Math.max(a[2], b[2]);
-    return out;
-};
-
-/**
- * Math.round the components of a vec3
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a vector to round
- * @returns {vec3} out
- */
-vec3.round = function (out, a) {
-    out[0] = Math.round(a[0]);
-    out[1] = Math.round(a[1]);
-    out[2] = Math.round(a[2]);
-    return out;
-};
-
-/**
- * Scales a vec3 by a scalar number
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the vector to scale
- * @param {Number} b amount to scale the vector by
- * @returns {vec3} out
- */
-vec3.scale = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    out[2] = a[2] * b;
-    return out;
-};
-
-/**
- * Adds two vec3's after scaling the second operand by a scalar value
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @param {Number} scale the amount to scale b by before adding
- * @returns {vec3} out
- */
-vec3.scaleAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    out[2] = a[2] + (b[2] * scale);
-    return out;
-};
-
-/**
- * Calculates the euclidian distance between two vec3's
- *
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {Number} distance between a and b
- */
-vec3.distance = function(a, b) {
-    var x = b[0] - a[0],
-        y = b[1] - a[1],
-        z = b[2] - a[2];
-    return Math.sqrt(x*x + y*y + z*z);
-};
-
-/**
- * Alias for {@link vec3.distance}
- * @function
- */
-vec3.dist = vec3.distance;
-
-/**
- * Calculates the squared euclidian distance between two vec3's
- *
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {Number} squared distance between a and b
- */
-vec3.squaredDistance = function(a, b) {
-    var x = b[0] - a[0],
-        y = b[1] - a[1],
-        z = b[2] - a[2];
-    return x*x + y*y + z*z;
-};
-
-/**
- * Alias for {@link vec3.squaredDistance}
- * @function
- */
-vec3.sqrDist = vec3.squaredDistance;
-
-/**
- * Calculates the length of a vec3
- *
- * @param {vec3} a vector to calculate length of
- * @returns {Number} length of a
- */
-vec3.length = function (a) {
-    var x = a[0],
-        y = a[1],
-        z = a[2];
-    return Math.sqrt(x*x + y*y + z*z);
-};
-
-/**
- * Alias for {@link vec3.length}
- * @function
- */
-vec3.len = vec3.length;
-
-/**
- * Calculates the squared length of a vec3
- *
- * @param {vec3} a vector to calculate squared length of
- * @returns {Number} squared length of a
- */
-vec3.squaredLength = function (a) {
-    var x = a[0],
-        y = a[1],
-        z = a[2];
-    return x*x + y*y + z*z;
-};
-
-/**
- * Alias for {@link vec3.squaredLength}
- * @function
- */
-vec3.sqrLen = vec3.squaredLength;
-
-/**
- * Negates the components of a vec3
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a vector to negate
- * @returns {vec3} out
- */
-vec3.negate = function(out, a) {
-    out[0] = -a[0];
-    out[1] = -a[1];
-    out[2] = -a[2];
-    return out;
-};
-
-/**
- * Returns the inverse of the components of a vec3
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a vector to invert
- * @returns {vec3} out
- */
-vec3.inverse = function(out, a) {
-  out[0] = 1.0 / a[0];
-  out[1] = 1.0 / a[1];
-  out[2] = 1.0 / a[2];
-  return out;
-};
-
-/**
- * Normalize a vec3
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a vector to normalize
- * @returns {vec3} out
- */
-vec3.normalize = function(out, a) {
-    var x = a[0],
-        y = a[1],
-        z = a[2];
-    var len = x*x + y*y + z*z;
-    if (len > 0) {
-        //TODO: evaluate use of glm_invsqrt here?
-        len = 1 / Math.sqrt(len);
-        out[0] = a[0] * len;
-        out[1] = a[1] * len;
-        out[2] = a[2] * len;
+  return function (a, stride, offset, count, fn, arg) {
+    var i = void 0,
+        l = void 0;
+    if (!stride) {
+      stride = 2;
     }
-    return out;
-};
 
-/**
- * Calculates the dot product of two vec3's
- *
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {Number} dot product of a and b
- */
-vec3.dot = function (a, b) {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-};
+    if (!offset) {
+      offset = 0;
+    }
 
-/**
- * Computes the cross product of two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @returns {vec3} out
- */
-vec3.cross = function(out, a, b) {
-    var ax = a[0], ay = a[1], az = a[2],
-        bx = b[0], by = b[1], bz = b[2];
-
-    out[0] = ay * bz - az * by;
-    out[1] = az * bx - ax * bz;
-    out[2] = ax * by - ay * bx;
-    return out;
-};
-
-/**
- * Performs a linear interpolation between two vec3's
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @param {Number} t interpolation amount between the two inputs
- * @returns {vec3} out
- */
-vec3.lerp = function (out, a, b, t) {
-    var ax = a[0],
-        ay = a[1],
-        az = a[2];
-    out[0] = ax + t * (b[0] - ax);
-    out[1] = ay + t * (b[1] - ay);
-    out[2] = az + t * (b[2] - az);
-    return out;
-};
-
-/**
- * Performs a hermite interpolation with two control points
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @param {vec3} c the third operand
- * @param {vec3} d the fourth operand
- * @param {Number} t interpolation amount between the two inputs
- * @returns {vec3} out
- */
-vec3.hermite = function (out, a, b, c, d, t) {
-  var factorTimes2 = t * t,
-      factor1 = factorTimes2 * (2 * t - 3) + 1,
-      factor2 = factorTimes2 * (t - 2) + t,
-      factor3 = factorTimes2 * (t - 1),
-      factor4 = factorTimes2 * (3 - 2 * t);
-  
-  out[0] = a[0] * factor1 + b[0] * factor2 + c[0] * factor3 + d[0] * factor4;
-  out[1] = a[1] * factor1 + b[1] * factor2 + c[1] * factor3 + d[1] * factor4;
-  out[2] = a[2] * factor1 + b[2] * factor2 + c[2] * factor3 + d[2] * factor4;
-  
-  return out;
-};
-
-/**
- * Performs a bezier interpolation with two control points
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the first operand
- * @param {vec3} b the second operand
- * @param {vec3} c the third operand
- * @param {vec3} d the fourth operand
- * @param {Number} t interpolation amount between the two inputs
- * @returns {vec3} out
- */
-vec3.bezier = function (out, a, b, c, d, t) {
-  var inverseFactor = 1 - t,
-      inverseFactorTimesTwo = inverseFactor * inverseFactor,
-      factorTimes2 = t * t,
-      factor1 = inverseFactorTimesTwo * inverseFactor,
-      factor2 = 3 * t * inverseFactorTimesTwo,
-      factor3 = 3 * factorTimes2 * inverseFactor,
-      factor4 = factorTimes2 * t;
-  
-  out[0] = a[0] * factor1 + b[0] * factor2 + c[0] * factor3 + d[0] * factor4;
-  out[1] = a[1] * factor1 + b[1] * factor2 + c[1] * factor3 + d[1] * factor4;
-  out[2] = a[2] * factor1 + b[2] * factor2 + c[2] * factor3 + d[2] * factor4;
-  
-  return out;
-};
-
-/**
- * Generates a random vector with the given scale
- *
- * @param {vec3} out the receiving vector
- * @param {Number} [scale] Length of the resulting vector. If ommitted, a unit vector will be returned
- * @returns {vec3} out
- */
-vec3.random = function (out, scale) {
-    scale = scale || 1.0;
-
-    var r = glMatrix.RANDOM() * 2.0 * Math.PI;
-    var z = (glMatrix.RANDOM() * 2.0) - 1.0;
-    var zScale = Math.sqrt(1.0-z*z) * scale;
-
-    out[0] = Math.cos(r) * zScale;
-    out[1] = Math.sin(r) * zScale;
-    out[2] = z * scale;
-    return out;
-};
-
-/**
- * Transforms the vec3 with a mat4.
- * 4th vector component is implicitly '1'
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the vector to transform
- * @param {mat4} m matrix to transform with
- * @returns {vec3} out
- */
-vec3.transformMat4 = function(out, a, m) {
-    var x = a[0], y = a[1], z = a[2],
-        w = m[3] * x + m[7] * y + m[11] * z + m[15];
-    w = w || 1.0;
-    out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
-    out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
-    out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
-    return out;
-};
-
-/**
- * Transforms the vec3 with a mat3.
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the vector to transform
- * @param {mat4} m the 3x3 matrix to transform with
- * @returns {vec3} out
- */
-vec3.transformMat3 = function(out, a, m) {
-    var x = a[0], y = a[1], z = a[2];
-    out[0] = x * m[0] + y * m[3] + z * m[6];
-    out[1] = x * m[1] + y * m[4] + z * m[7];
-    out[2] = x * m[2] + y * m[5] + z * m[8];
-    return out;
-};
-
-/**
- * Transforms the vec3 with a quat
- *
- * @param {vec3} out the receiving vector
- * @param {vec3} a the vector to transform
- * @param {quat} q quaternion to transform with
- * @returns {vec3} out
- */
-vec3.transformQuat = function(out, a, q) {
-    // benchmarks: http://jsperf.com/quaternion-transform-vec3-implementations
-
-    var x = a[0], y = a[1], z = a[2],
-        qx = q[0], qy = q[1], qz = q[2], qw = q[3],
-
-        // calculate quat * vec
-        ix = qw * x + qy * z - qz * y,
-        iy = qw * y + qz * x - qx * z,
-        iz = qw * z + qx * y - qy * x,
-        iw = -qx * x - qy * y - qz * z;
-
-    // calculate result * inverse quat
-    out[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
-    out[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
-    out[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
-    return out;
-};
-
-/**
- * Rotate a 3D vector around the x-axis
- * @param {vec3} out The receiving vec3
- * @param {vec3} a The vec3 point to rotate
- * @param {vec3} b The origin of the rotation
- * @param {Number} c The angle of rotation
- * @returns {vec3} out
- */
-vec3.rotateX = function(out, a, b, c){
-   var p = [], r=[];
-	  //Translate point to the origin
-	  p[0] = a[0] - b[0];
-	  p[1] = a[1] - b[1];
-  	p[2] = a[2] - b[2];
-
-	  //perform rotation
-	  r[0] = p[0];
-	  r[1] = p[1]*Math.cos(c) - p[2]*Math.sin(c);
-	  r[2] = p[1]*Math.sin(c) + p[2]*Math.cos(c);
-
-	  //translate to correct position
-	  out[0] = r[0] + b[0];
-	  out[1] = r[1] + b[1];
-	  out[2] = r[2] + b[2];
-
-  	return out;
-};
-
-/**
- * Rotate a 3D vector around the y-axis
- * @param {vec3} out The receiving vec3
- * @param {vec3} a The vec3 point to rotate
- * @param {vec3} b The origin of the rotation
- * @param {Number} c The angle of rotation
- * @returns {vec3} out
- */
-vec3.rotateY = function(out, a, b, c){
-  	var p = [], r=[];
-  	//Translate point to the origin
-  	p[0] = a[0] - b[0];
-  	p[1] = a[1] - b[1];
-  	p[2] = a[2] - b[2];
-  
-  	//perform rotation
-  	r[0] = p[2]*Math.sin(c) + p[0]*Math.cos(c);
-  	r[1] = p[1];
-  	r[2] = p[2]*Math.cos(c) - p[0]*Math.sin(c);
-  
-  	//translate to correct position
-  	out[0] = r[0] + b[0];
-  	out[1] = r[1] + b[1];
-  	out[2] = r[2] + b[2];
-  
-  	return out;
-};
-
-/**
- * Rotate a 3D vector around the z-axis
- * @param {vec3} out The receiving vec3
- * @param {vec3} a The vec3 point to rotate
- * @param {vec3} b The origin of the rotation
- * @param {Number} c The angle of rotation
- * @returns {vec3} out
- */
-vec3.rotateZ = function(out, a, b, c){
-  	var p = [], r=[];
-  	//Translate point to the origin
-  	p[0] = a[0] - b[0];
-  	p[1] = a[1] - b[1];
-  	p[2] = a[2] - b[2];
-  
-  	//perform rotation
-  	r[0] = p[0]*Math.cos(c) - p[1]*Math.sin(c);
-  	r[1] = p[0]*Math.sin(c) + p[1]*Math.cos(c);
-  	r[2] = p[2];
-  
-  	//translate to correct position
-  	out[0] = r[0] + b[0];
-  	out[1] = r[1] + b[1];
-  	out[2] = r[2] + b[2];
-  
-  	return out;
-};
-
-/**
- * Perform some operation over an array of vec3s.
- *
- * @param {Array} a the array of vectors to iterate over
- * @param {Number} stride Number of elements between the start of each vec3. If 0 assumes tightly packed
- * @param {Number} offset Number of elements to skip at the beginning of the array
- * @param {Number} count Number of vec3s to iterate over. If 0 iterates over entire array
- * @param {Function} fn Function to call for each vector in the array
- * @param {Object} [arg] additional argument to pass to fn
- * @returns {Array} a
- * @function
- */
-vec3.forEach = (function() {
-    var vec = vec3.create();
-
-    return function(a, stride, offset, count, fn, arg) {
-        var i, l;
-        if(!stride) {
-            stride = 3;
-        }
-
-        if(!offset) {
-            offset = 0;
-        }
-        
-        if(count) {
-            l = Math.min((count * stride) + offset, a.length);
-        } else {
-            l = a.length;
-        }
-
-        for(i = offset; i < l; i += stride) {
-            vec[0] = a[i]; vec[1] = a[i+1]; vec[2] = a[i+2];
-            fn(vec, vec, arg);
-            a[i] = vec[0]; a[i+1] = vec[1]; a[i+2] = vec[2];
-        }
-        
-        return a;
-    };
-})();
-
-/**
- * Get the angle between two 3D vectors
- * @param {vec3} a The first operand
- * @param {vec3} b The second operand
- * @returns {Number} The angle in radians
- */
-vec3.angle = function(a, b) {
-   
-    var tempA = vec3.fromValues(a[0], a[1], a[2]);
-    var tempB = vec3.fromValues(b[0], b[1], b[2]);
- 
-    vec3.normalize(tempA, tempA);
-    vec3.normalize(tempB, tempB);
- 
-    var cosine = vec3.dot(tempA, tempB);
-
-    if(cosine > 1.0){
-        return 0;
+    if (count) {
+      l = Math.min(count * stride + offset, a.length);
     } else {
-        return Math.acos(cosine);
-    }     
-};
-
-/**
- * Returns a string representation of a vector
- *
- * @param {vec3} vec vector to represent as a string
- * @returns {String} string representation of the vector
- */
-vec3.str = function (a) {
-    return 'vec3(' + a[0] + ', ' + a[1] + ', ' + a[2] + ')';
-};
-
-/**
- * Returns whether or not the vectors have exactly the same elements in the same position (when compared with ===)
- *
- * @param {vec3} a The first vector.
- * @param {vec3} b The second vector.
- * @returns {Boolean} True if the vectors are equal, false otherwise.
- */
-vec3.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
-};
-
-/**
- * Returns whether or not the vectors have approximately the same elements in the same position.
- *
- * @param {vec3} a The first vector.
- * @param {vec3} b The second vector.
- * @returns {Boolean} True if the vectors are equal, false otherwise.
- */
-vec3.equals = function (a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2];
-    var b0 = b[0], b1 = b[1], b2 = b[2];
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)) &&
-            Math.abs(a2 - b2) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a2), Math.abs(b2)));
-};
-
-module.exports = vec3;
-
-},{"./common.js":26}],34:[function(require,module,exports){
-/* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE. */
-
-var glMatrix = require("./common.js");
-
-/**
- * @class 4 Dimensional Vector
- * @name vec4
- */
-var vec4 = {};
-
-/**
- * Creates a new, empty vec4
- *
- * @returns {vec4} a new 4D vector
- */
-vec4.create = function() {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    return out;
-};
-
-/**
- * Creates a new vec4 initialized with values from an existing vector
- *
- * @param {vec4} a vector to clone
- * @returns {vec4} a new 4D vector
- */
-vec4.clone = function(a) {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    return out;
-};
-
-/**
- * Creates a new vec4 initialized with the given values
- *
- * @param {Number} x X component
- * @param {Number} y Y component
- * @param {Number} z Z component
- * @param {Number} w W component
- * @returns {vec4} a new 4D vector
- */
-vec4.fromValues = function(x, y, z, w) {
-    var out = new glMatrix.ARRAY_TYPE(4);
-    out[0] = x;
-    out[1] = y;
-    out[2] = z;
-    out[3] = w;
-    return out;
-};
-
-/**
- * Copy the values from one vec4 to another
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the source vector
- * @returns {vec4} out
- */
-vec4.copy = function(out, a) {
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = a[2];
-    out[3] = a[3];
-    return out;
-};
-
-/**
- * Set the components of a vec4 to the given values
- *
- * @param {vec4} out the receiving vector
- * @param {Number} x X component
- * @param {Number} y Y component
- * @param {Number} z Z component
- * @param {Number} w W component
- * @returns {vec4} out
- */
-vec4.set = function(out, x, y, z, w) {
-    out[0] = x;
-    out[1] = y;
-    out[2] = z;
-    out[3] = w;
-    return out;
-};
-
-/**
- * Adds two vec4's
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {vec4} out
- */
-vec4.add = function(out, a, b) {
-    out[0] = a[0] + b[0];
-    out[1] = a[1] + b[1];
-    out[2] = a[2] + b[2];
-    out[3] = a[3] + b[3];
-    return out;
-};
-
-/**
- * Subtracts vector b from vector a
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {vec4} out
- */
-vec4.subtract = function(out, a, b) {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
-    out[3] = a[3] - b[3];
-    return out;
-};
-
-/**
- * Alias for {@link vec4.subtract}
- * @function
- */
-vec4.sub = vec4.subtract;
-
-/**
- * Multiplies two vec4's
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {vec4} out
- */
-vec4.multiply = function(out, a, b) {
-    out[0] = a[0] * b[0];
-    out[1] = a[1] * b[1];
-    out[2] = a[2] * b[2];
-    out[3] = a[3] * b[3];
-    return out;
-};
-
-/**
- * Alias for {@link vec4.multiply}
- * @function
- */
-vec4.mul = vec4.multiply;
-
-/**
- * Divides two vec4's
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {vec4} out
- */
-vec4.divide = function(out, a, b) {
-    out[0] = a[0] / b[0];
-    out[1] = a[1] / b[1];
-    out[2] = a[2] / b[2];
-    out[3] = a[3] / b[3];
-    return out;
-};
-
-/**
- * Alias for {@link vec4.divide}
- * @function
- */
-vec4.div = vec4.divide;
-
-/**
- * Math.ceil the components of a vec4
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a vector to ceil
- * @returns {vec4} out
- */
-vec4.ceil = function (out, a) {
-    out[0] = Math.ceil(a[0]);
-    out[1] = Math.ceil(a[1]);
-    out[2] = Math.ceil(a[2]);
-    out[3] = Math.ceil(a[3]);
-    return out;
-};
-
-/**
- * Math.floor the components of a vec4
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a vector to floor
- * @returns {vec4} out
- */
-vec4.floor = function (out, a) {
-    out[0] = Math.floor(a[0]);
-    out[1] = Math.floor(a[1]);
-    out[2] = Math.floor(a[2]);
-    out[3] = Math.floor(a[3]);
-    return out;
-};
-
-/**
- * Returns the minimum of two vec4's
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {vec4} out
- */
-vec4.min = function(out, a, b) {
-    out[0] = Math.min(a[0], b[0]);
-    out[1] = Math.min(a[1], b[1]);
-    out[2] = Math.min(a[2], b[2]);
-    out[3] = Math.min(a[3], b[3]);
-    return out;
-};
-
-/**
- * Returns the maximum of two vec4's
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {vec4} out
- */
-vec4.max = function(out, a, b) {
-    out[0] = Math.max(a[0], b[0]);
-    out[1] = Math.max(a[1], b[1]);
-    out[2] = Math.max(a[2], b[2]);
-    out[3] = Math.max(a[3], b[3]);
-    return out;
-};
-
-/**
- * Math.round the components of a vec4
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a vector to round
- * @returns {vec4} out
- */
-vec4.round = function (out, a) {
-    out[0] = Math.round(a[0]);
-    out[1] = Math.round(a[1]);
-    out[2] = Math.round(a[2]);
-    out[3] = Math.round(a[3]);
-    return out;
-};
-
-/**
- * Scales a vec4 by a scalar number
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the vector to scale
- * @param {Number} b amount to scale the vector by
- * @returns {vec4} out
- */
-vec4.scale = function(out, a, b) {
-    out[0] = a[0] * b;
-    out[1] = a[1] * b;
-    out[2] = a[2] * b;
-    out[3] = a[3] * b;
-    return out;
-};
-
-/**
- * Adds two vec4's after scaling the second operand by a scalar value
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @param {Number} scale the amount to scale b by before adding
- * @returns {vec4} out
- */
-vec4.scaleAndAdd = function(out, a, b, scale) {
-    out[0] = a[0] + (b[0] * scale);
-    out[1] = a[1] + (b[1] * scale);
-    out[2] = a[2] + (b[2] * scale);
-    out[3] = a[3] + (b[3] * scale);
-    return out;
-};
-
-/**
- * Calculates the euclidian distance between two vec4's
- *
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {Number} distance between a and b
- */
-vec4.distance = function(a, b) {
-    var x = b[0] - a[0],
-        y = b[1] - a[1],
-        z = b[2] - a[2],
-        w = b[3] - a[3];
-    return Math.sqrt(x*x + y*y + z*z + w*w);
-};
-
-/**
- * Alias for {@link vec4.distance}
- * @function
- */
-vec4.dist = vec4.distance;
-
-/**
- * Calculates the squared euclidian distance between two vec4's
- *
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {Number} squared distance between a and b
- */
-vec4.squaredDistance = function(a, b) {
-    var x = b[0] - a[0],
-        y = b[1] - a[1],
-        z = b[2] - a[2],
-        w = b[3] - a[3];
-    return x*x + y*y + z*z + w*w;
-};
-
-/**
- * Alias for {@link vec4.squaredDistance}
- * @function
- */
-vec4.sqrDist = vec4.squaredDistance;
-
-/**
- * Calculates the length of a vec4
- *
- * @param {vec4} a vector to calculate length of
- * @returns {Number} length of a
- */
-vec4.length = function (a) {
-    var x = a[0],
-        y = a[1],
-        z = a[2],
-        w = a[3];
-    return Math.sqrt(x*x + y*y + z*z + w*w);
-};
-
-/**
- * Alias for {@link vec4.length}
- * @function
- */
-vec4.len = vec4.length;
-
-/**
- * Calculates the squared length of a vec4
- *
- * @param {vec4} a vector to calculate squared length of
- * @returns {Number} squared length of a
- */
-vec4.squaredLength = function (a) {
-    var x = a[0],
-        y = a[1],
-        z = a[2],
-        w = a[3];
-    return x*x + y*y + z*z + w*w;
-};
-
-/**
- * Alias for {@link vec4.squaredLength}
- * @function
- */
-vec4.sqrLen = vec4.squaredLength;
-
-/**
- * Negates the components of a vec4
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a vector to negate
- * @returns {vec4} out
- */
-vec4.negate = function(out, a) {
-    out[0] = -a[0];
-    out[1] = -a[1];
-    out[2] = -a[2];
-    out[3] = -a[3];
-    return out;
-};
-
-/**
- * Returns the inverse of the components of a vec4
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a vector to invert
- * @returns {vec4} out
- */
-vec4.inverse = function(out, a) {
-  out[0] = 1.0 / a[0];
-  out[1] = 1.0 / a[1];
-  out[2] = 1.0 / a[2];
-  out[3] = 1.0 / a[3];
-  return out;
-};
-
-/**
- * Normalize a vec4
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a vector to normalize
- * @returns {vec4} out
- */
-vec4.normalize = function(out, a) {
-    var x = a[0],
-        y = a[1],
-        z = a[2],
-        w = a[3];
-    var len = x*x + y*y + z*z + w*w;
-    if (len > 0) {
-        len = 1 / Math.sqrt(len);
-        out[0] = x * len;
-        out[1] = y * len;
-        out[2] = z * len;
-        out[3] = w * len;
+      l = a.length;
     }
-    return out;
-};
 
-/**
- * Calculates the dot product of two vec4's
- *
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @returns {Number} dot product of a and b
- */
-vec4.dot = function (a, b) {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
-};
+    for (i = offset; i < l; i += stride) {
+      vec[0] = a[i];vec[1] = a[i + 1];
+      fn(vec, vec, arg);
+      a[i] = vec[0];a[i + 1] = vec[1];
+    }
 
-/**
- * Performs a linear interpolation between two vec4's
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the first operand
- * @param {vec4} b the second operand
- * @param {Number} t interpolation amount between the two inputs
- * @returns {vec4} out
- */
-vec4.lerp = function (out, a, b, t) {
-    var ax = a[0],
-        ay = a[1],
-        az = a[2],
-        aw = a[3];
-    out[0] = ax + t * (b[0] - ax);
-    out[1] = ay + t * (b[1] - ay);
-    out[2] = az + t * (b[2] - az);
-    out[3] = aw + t * (b[3] - aw);
-    return out;
-};
+    return a;
+  };
+}();
 
-/**
- * Generates a random vector with the given scale
- *
- * @param {vec4} out the receiving vector
- * @param {Number} [scale] Length of the resulting vector. If ommitted, a unit vector will be returned
- * @returns {vec4} out
- */
-vec4.random = function (out, scale) {
-    scale = scale || 1.0;
-
-    //TODO: This is a pretty awful way of doing this. Find something better.
-    out[0] = glMatrix.RANDOM();
-    out[1] = glMatrix.RANDOM();
-    out[2] = glMatrix.RANDOM();
-    out[3] = glMatrix.RANDOM();
-    vec4.normalize(out, out);
-    vec4.scale(out, out, scale);
-    return out;
-};
-
-/**
- * Transforms the vec4 with a mat4.
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the vector to transform
- * @param {mat4} m matrix to transform with
- * @returns {vec4} out
- */
-vec4.transformMat4 = function(out, a, m) {
-    var x = a[0], y = a[1], z = a[2], w = a[3];
-    out[0] = m[0] * x + m[4] * y + m[8] * z + m[12] * w;
-    out[1] = m[1] * x + m[5] * y + m[9] * z + m[13] * w;
-    out[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w;
-    out[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w;
-    return out;
-};
-
-/**
- * Transforms the vec4 with a quat
- *
- * @param {vec4} out the receiving vector
- * @param {vec4} a the vector to transform
- * @param {quat} q quaternion to transform with
- * @returns {vec4} out
- */
-vec4.transformQuat = function(out, a, q) {
-    var x = a[0], y = a[1], z = a[2],
-        qx = q[0], qy = q[1], qz = q[2], qw = q[3],
-
-        // calculate quat * vec
-        ix = qw * x + qy * z - qz * y,
-        iy = qw * y + qz * x - qx * z,
-        iz = qw * z + qx * y - qy * x,
-        iw = -qx * x - qy * y - qz * z;
-
-    // calculate result * inverse quat
-    out[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
-    out[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
-    out[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
-    out[3] = a[3];
-    return out;
-};
-
-/**
- * Perform some operation over an array of vec4s.
- *
- * @param {Array} a the array of vectors to iterate over
- * @param {Number} stride Number of elements between the start of each vec4. If 0 assumes tightly packed
- * @param {Number} offset Number of elements to skip at the beginning of the array
- * @param {Number} count Number of vec4s to iterate over. If 0 iterates over entire array
- * @param {Function} fn Function to call for each vector in the array
- * @param {Object} [arg] additional argument to pass to fn
- * @returns {Array} a
- * @function
- */
-vec4.forEach = (function() {
-    var vec = vec4.create();
-
-    return function(a, stride, offset, count, fn, arg) {
-        var i, l;
-        if(!stride) {
-            stride = 4;
-        }
-
-        if(!offset) {
-            offset = 0;
-        }
-        
-        if(count) {
-            l = Math.min((count * stride) + offset, a.length);
-        } else {
-            l = a.length;
-        }
-
-        for(i = offset; i < l; i += stride) {
-            vec[0] = a[i]; vec[1] = a[i+1]; vec[2] = a[i+2]; vec[3] = a[i+3];
-            fn(vec, vec, arg);
-            a[i] = vec[0]; a[i+1] = vec[1]; a[i+2] = vec[2]; a[i+3] = vec[3];
-        }
-        
-        return a;
-    };
-})();
-
-/**
- * Returns a string representation of a vector
- *
- * @param {vec4} vec vector to represent as a string
- * @returns {String} string representation of the vector
- */
-vec4.str = function (a) {
-    return 'vec4(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ')';
-};
-
-/**
- * Returns whether or not the vectors have exactly the same elements in the same position (when compared with ===)
- *
- * @param {vec4} a The first vector.
- * @param {vec4} b The second vector.
- * @returns {Boolean} True if the vectors are equal, false otherwise.
- */
-vec4.exactEquals = function (a, b) {
-    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
-};
-
-/**
- * Returns whether or not the vectors have approximately the same elements in the same position.
- *
- * @param {vec4} a The first vector.
- * @param {vec4} b The second vector.
- * @returns {Boolean} True if the vectors are equal, false otherwise.
- */
-vec4.equals = function (a, b) {
-    var a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3];
-    var b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
-    return (Math.abs(a0 - b0) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a0), Math.abs(b0)) &&
-            Math.abs(a1 - b1) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a1), Math.abs(b1)) &&
-            Math.abs(a2 - b2) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a2), Math.abs(b2)) &&
-            Math.abs(a3 - b3) <= glMatrix.EPSILON*Math.max(1.0, Math.abs(a3), Math.abs(b3)));
-};
-
-module.exports = vec4;
-
-},{"./common.js":26}],35:[function(require,module,exports){
+/***/ })
+/******/ ]);
+});
+},{}],26:[function(require,module,exports){
 'use strict';
 
 module.exports = GridIndex;
@@ -20401,7 +20798,7 @@ GridIndex.prototype.toArrayBuffer = function() {
     return array.buffer;
 };
 
-},{}],36:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 (function (global){
 'use strict'
 
@@ -20418,7 +20815,7 @@ else {
 module.exports = hasHover
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"is-browser":38}],37:[function(require,module,exports){
+},{"is-browser":29}],28:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -20504,9 +20901,9 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],38:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 module.exports = true;
-},{}],39:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 'use strict';
 
 var sort = require('./sort');
@@ -20552,7 +20949,7 @@ KDBush.prototype = {
 function defaultGetX(p) { return p[0]; }
 function defaultGetY(p) { return p[1]; }
 
-},{"./range":40,"./sort":41,"./within":42}],40:[function(require,module,exports){
+},{"./range":31,"./sort":32,"./within":33}],31:[function(require,module,exports){
 'use strict';
 
 module.exports = range;
@@ -20600,7 +20997,7 @@ function range(ids, coords, minX, minY, maxX, maxY, nodeSize) {
     return result;
 }
 
-},{}],41:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 'use strict';
 
 module.exports = sortKD;
@@ -20668,7 +21065,7 @@ function swap(arr, i, j) {
     arr[j] = tmp;
 }
 
-},{}],42:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 'use strict';
 
 module.exports = within;
@@ -20720,7 +21117,7 @@ function sqDist(ax, ay, bx, by) {
     return dx * dx + dy * dy;
 }
 
-},{}],43:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 'use strict';
 
 function createFunction(parameters, defaultType) {
@@ -20893,7 +21290,7 @@ module.exports['piecewise-constant'] = function(parameters) {
     return createFunction(parameters, 'interval');
 };
 
-},{}],44:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 
 var path = require('path');
 
@@ -20955,7 +21352,7 @@ module.exports = {
 
 module.exports.util = "float evaluate_zoom_function_1(const vec4 values, const float t) {\n    if (t < 1.0) {\n        return mix(values[0], values[1], t);\n    } else if (t < 2.0) {\n        return mix(values[1], values[2], t - 1.0);\n    } else {\n        return mix(values[2], values[3], t - 2.0);\n    }\n}\nvec4 evaluate_zoom_function_4(const vec4 value0, const vec4 value1, const vec4 value2, const vec4 value3, const float t) {\n    if (t < 1.0) {\n        return mix(value0, value1, t);\n    } else if (t < 2.0) {\n        return mix(value1, value2, t - 1.0);\n    } else {\n        return mix(value2, value3, t - 2.0);\n    }\n}\n";
 
-},{"path":187}],45:[function(require,module,exports){
+},{"path":178}],36:[function(require,module,exports){
 'use strict';
 
 var format = require('util').format;
@@ -20973,7 +21370,7 @@ function ValidationError(key, value /*, message, ...*/) {
 
 module.exports = ValidationError;
 
-},{"util":206}],46:[function(require,module,exports){
+},{"util":197}],37:[function(require,module,exports){
 'use strict';
 
 module.exports = function (output) {
@@ -20986,7 +21383,7 @@ module.exports = function (output) {
     return output;
 };
 
-},{}],47:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 'use strict';
 
 module.exports = function getType(val) {
@@ -21005,7 +21402,7 @@ module.exports = function getType(val) {
     }
 };
 
-},{}],48:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 'use strict';
 
 // Turn jsonlint-lines-primitives objects into primitive objects
@@ -21017,7 +21414,7 @@ module.exports = function unbundle(value) {
     }
 };
 
-},{}],49:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21084,7 +21481,7 @@ module.exports = function validate(options) {
     }
 };
 
-},{"../error/validation_error":45,"../util/extend":46,"../util/get_type":47,"./validate_array":50,"./validate_boolean":51,"./validate_color":52,"./validate_constants":53,"./validate_enum":54,"./validate_filter":55,"./validate_function":56,"./validate_layer":58,"./validate_number":60,"./validate_object":61,"./validate_source":63,"./validate_string":64}],50:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/extend":37,"../util/get_type":38,"./validate_array":41,"./validate_boolean":42,"./validate_color":43,"./validate_constants":44,"./validate_enum":45,"./validate_filter":46,"./validate_function":47,"./validate_layer":49,"./validate_number":51,"./validate_object":52,"./validate_source":54,"./validate_string":55}],41:[function(require,module,exports){
 'use strict';
 
 var getType = require('../util/get_type');
@@ -21138,7 +21535,7 @@ module.exports = function validateArray(options) {
     return errors;
 };
 
-},{"../error/validation_error":45,"../util/get_type":47,"./validate":49}],51:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38,"./validate":40}],42:[function(require,module,exports){
 'use strict';
 
 var getType = require('../util/get_type');
@@ -21156,7 +21553,7 @@ module.exports = function validateBoolean(options) {
     return [];
 };
 
-},{"../error/validation_error":45,"../util/get_type":47}],52:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38}],43:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21179,7 +21576,7 @@ module.exports = function validateColor(options) {
     return [];
 };
 
-},{"../error/validation_error":45,"../util/get_type":47,"csscolorparser":7}],53:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38,"csscolorparser":7}],44:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21213,7 +21610,7 @@ module.exports = function validateConstants(options) {
 
 };
 
-},{"../error/validation_error":45,"../util/get_type":47}],54:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38}],45:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21231,7 +21628,7 @@ module.exports = function validateEnum(options) {
     return errors;
 };
 
-},{"../error/validation_error":45,"../util/unbundle_jsonlint":48}],55:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/unbundle_jsonlint":39}],46:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21336,7 +21733,7 @@ module.exports = function validateFilter(options) {
     return errors;
 };
 
-},{"../error/validation_error":45,"../util/get_type":47,"../util/unbundle_jsonlint":48,"./validate_enum":54}],56:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38,"../util/unbundle_jsonlint":39,"./validate_enum":45}],47:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21470,7 +21867,7 @@ module.exports = function validateFunction(options) {
 
 };
 
-},{"../error/validation_error":45,"../util/get_type":47,"./validate":49,"./validate_array":50,"./validate_number":60,"./validate_object":61}],57:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38,"./validate":40,"./validate_array":41,"./validate_number":51,"./validate_object":52}],48:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21494,7 +21891,7 @@ module.exports = function(options) {
     return errors;
 };
 
-},{"../error/validation_error":45,"./validate_string":64}],58:[function(require,module,exports){
+},{"../error/validation_error":36,"./validate_string":55}],49:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21607,7 +22004,7 @@ module.exports = function validateLayer(options) {
     return errors;
 };
 
-},{"../error/validation_error":45,"../util/extend":46,"../util/unbundle_jsonlint":48,"./validate_filter":55,"./validate_layout_property":59,"./validate_object":61,"./validate_paint_property":62}],59:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/extend":37,"../util/unbundle_jsonlint":39,"./validate_filter":46,"./validate_layout_property":50,"./validate_object":52,"./validate_paint_property":53}],50:[function(require,module,exports){
 'use strict';
 
 var validate = require('./validate');
@@ -21646,7 +22043,7 @@ module.exports = function validateLayoutProperty(options) {
 
 };
 
-},{"../error/validation_error":45,"./validate":49}],60:[function(require,module,exports){
+},{"../error/validation_error":36,"./validate":40}],51:[function(require,module,exports){
 'use strict';
 
 var getType = require('../util/get_type');
@@ -21673,7 +22070,7 @@ module.exports = function validateNumber(options) {
     return [];
 };
 
-},{"../error/validation_error":45,"../util/get_type":47}],61:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38}],52:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21726,7 +22123,7 @@ module.exports = function validateObject(options) {
     return errors;
 };
 
-},{"../error/validation_error":45,"../util/get_type":47,"./validate":49}],62:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38,"./validate":40}],53:[function(require,module,exports){
 'use strict';
 
 var validate = require('./validate');
@@ -21766,7 +22163,7 @@ module.exports = function validatePaintProperty(options) {
 
 };
 
-},{"../error/validation_error":45,"./validate":49}],63:[function(require,module,exports){
+},{"../error/validation_error":36,"./validate":40}],54:[function(require,module,exports){
 'use strict';
 
 var ValidationError = require('../error/validation_error');
@@ -21843,7 +22240,7 @@ module.exports = function validateSource(options) {
     }
 };
 
-},{"../error/validation_error":45,"../util/unbundle_jsonlint":48,"./validate_enum":54,"./validate_object":61}],64:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/unbundle_jsonlint":39,"./validate_enum":45,"./validate_object":52}],55:[function(require,module,exports){
 'use strict';
 
 var getType = require('../util/get_type');
@@ -21861,7 +22258,7 @@ module.exports = function validateString(options) {
     return [];
 };
 
-},{"../error/validation_error":45,"../util/get_type":47}],65:[function(require,module,exports){
+},{"../error/validation_error":36,"../util/get_type":38}],56:[function(require,module,exports){
 'use strict';
 
 var validateConstants = require('./validate/validate_constants');
@@ -21931,12 +22328,12 @@ function wrapCleanErrors(inner) {
 
 module.exports = validateStyleMin;
 
-},{"../reference/latest.min":66,"./validate/validate":49,"./validate/validate_constants":53,"./validate/validate_filter":55,"./validate/validate_glyphs_url":57,"./validate/validate_layer":58,"./validate/validate_layout_property":59,"./validate/validate_paint_property":62,"./validate/validate_source":63}],66:[function(require,module,exports){
+},{"../reference/latest.min":57,"./validate/validate":40,"./validate/validate_constants":44,"./validate/validate_filter":46,"./validate/validate_glyphs_url":48,"./validate/validate_layer":49,"./validate/validate_layout_property":50,"./validate/validate_paint_property":53,"./validate/validate_source":54}],57:[function(require,module,exports){
 module.exports = require('./v8.min.json');
 
-},{"./v8.min.json":67}],67:[function(require,module,exports){
+},{"./v8.min.json":58}],58:[function(require,module,exports){
 module.exports={"$version":8,"$root":{"version":{"required":true,"type":"enum","values":[8]},"name":{"type":"string"},"metadata":{"type":"*"},"center":{"type":"array","value":"number"},"zoom":{"type":"number"},"bearing":{"type":"number","default":0,"period":360,"units":"degrees"},"pitch":{"type":"number","default":0,"units":"degrees"},"sources":{"required":true,"type":"sources"},"sprite":{"type":"string"},"glyphs":{"type":"string"},"transition":{"type":"transition"},"layers":{"required":true,"type":"array","value":"layer"}},"sources":{"*":{"type":"source"}},"source":["source_tile","source_geojson","source_video","source_image"],"source_tile":{"type":{"required":true,"type":"enum","values":["vector","raster"]},"url":{"type":"string"},"tiles":{"type":"array","value":"string"},"minzoom":{"type":"number","default":0},"maxzoom":{"type":"number","default":22},"tileSize":{"type":"number","default":512,"units":"pixels"},"*":{"type":"*"}},"source_geojson":{"type":{"required":true,"type":"enum","values":["geojson"]},"data":{"type":"*"},"maxzoom":{"type":"number","default":14},"buffer":{"type":"number","default":64},"tolerance":{"type":"number","default":3},"cluster":{"type":"boolean","default":false},"clusterRadius":{"type":"number","default":400},"clusterMaxZoom":{"type":"number"}},"source_video":{"type":{"required":true,"type":"enum","values":["video"]},"urls":{"required":true,"type":"array","value":"string"},"coordinates":{"required":true,"type":"array","length":4,"value":{"type":"array","length":2,"value":"number"}}},"source_image":{"type":{"required":true,"type":"enum","values":["image"]},"url":{"required":true,"type":"string"},"coordinates":{"required":true,"type":"array","length":4,"value":{"type":"array","length":2,"value":"number"}}},"layer":{"id":{"type":"string","required":true},"type":{"type":"enum","values":["fill","line","symbol","circle","raster","background"]},"metadata":{"type":"*"},"ref":{"type":"string"},"source":{"type":"string"},"source-layer":{"type":"string"},"minzoom":{"type":"number","minimum":0,"maximum":22},"maxzoom":{"type":"number","minimum":0,"maximum":22},"interactive":{"type":"boolean","default":false},"filter":{"type":"filter"},"layout":{"type":"layout"},"paint":{"type":"paint"},"paint.*":{"type":"paint"}},"layout":["layout_fill","layout_line","layout_circle","layout_symbol","layout_raster","layout_background"],"layout_background":{"visibility":{"type":"enum","function":"piecewise-constant","zoom-function":true,"values":["visible","none"],"default":"visible"}},"layout_fill":{"visibility":{"type":"enum","function":"piecewise-constant","zoom-function":true,"values":["visible","none"],"default":"visible"}},"layout_circle":{"visibility":{"type":"enum","function":"piecewise-constant","zoom-function":true,"values":["visible","none"],"default":"visible"}},"layout_line":{"line-cap":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["butt","round","square"],"default":"butt"},"line-join":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["bevel","round","miter"],"default":"miter"},"line-miter-limit":{"type":"number","default":2,"function":"interpolated","zoom-function":true,"property-function":true,"requires":[{"line-join":"miter"}]},"line-round-limit":{"type":"number","default":1.05,"function":"interpolated","zoom-function":true,"property-function":true,"requires":[{"line-join":"round"}]},"visibility":{"type":"enum","function":"piecewise-constant","zoom-function":true,"values":["visible","none"],"default":"visible"}},"layout_symbol":{"symbol-placement":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["point","line"],"default":"point"},"symbol-spacing":{"type":"number","default":250,"minimum":1,"function":"interpolated","zoom-function":true,"property-function":true,"units":"pixels","requires":[{"symbol-placement":"line"}]},"symbol-avoid-edges":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false},"icon-allow-overlap":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["icon-image"]},"icon-ignore-placement":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["icon-image"]},"icon-optional":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["icon-image","text-field"]},"icon-rotation-alignment":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"viewport","requires":["icon-image"]},"icon-size":{"type":"number","default":1,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"requires":["icon-image"]},"icon-text-fit":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":false,"values":["none","both","width","height"],"default":"none","requires":["icon-image","text-field"]},"icon-text-fit-padding":{"type":"array","value":"number","length":4,"default":[0,0,0,0],"units":"pixels","function":"interpolated","zoom-function":true,"property-function":true,"requires":["icon-image","icon-text-fit","text-field"]},"icon-image":{"type":"string","function":"piecewise-constant","zoom-function":true,"property-function":true,"tokens":true},"icon-rotate":{"type":"number","default":0,"period":360,"function":"interpolated","zoom-function":true,"property-function":true,"units":"degrees","requires":["icon-image"]},"icon-padding":{"type":"number","default":2,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"units":"pixels","requires":["icon-image"]},"icon-keep-upright":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["icon-image",{"icon-rotation-alignment":"map"},{"symbol-placement":"line"}]},"icon-offset":{"type":"array","value":"number","length":2,"default":[0,0],"function":"interpolated","zoom-function":true,"property-function":true,"requires":["icon-image"]},"text-pitch-alignment":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"requires":["text-field"]},"text-rotation-alignment":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"viewport","requires":["text-field"]},"text-field":{"type":"string","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":"","tokens":true},"text-font":{"type":"array","value":"string","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":["Open Sans Regular","Arial Unicode MS Regular"],"requires":["text-field"]},"text-size":{"type":"number","default":16,"minimum":0,"units":"pixels","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field"]},"text-max-width":{"type":"number","default":10,"minimum":0,"units":"em","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field"]},"text-line-height":{"type":"number","default":1.2,"units":"em","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field"]},"text-letter-spacing":{"type":"number","default":0,"units":"em","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field"]},"text-justify":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["left","center","right"],"default":"center","requires":["text-field"]},"text-anchor":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["center","left","right","top","bottom","top-left","top-right","bottom-left","bottom-right"],"default":"center","requires":["text-field"]},"text-max-angle":{"type":"number","default":45,"units":"degrees","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field",{"symbol-placement":"line"}]},"text-rotate":{"type":"number","default":0,"period":360,"units":"degrees","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field"]},"text-padding":{"type":"number","default":2,"minimum":0,"units":"pixels","function":"interpolated","zoom-function":true,"property-function":true,"requires":["text-field"]},"text-keep-upright":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":true,"requires":["text-field",{"text-rotation-alignment":"map"},{"symbol-placement":"line"}]},"text-transform":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["none","uppercase","lowercase"],"default":"none","requires":["text-field"]},"text-offset":{"type":"array","value":"number","units":"ems","function":"interpolated","zoom-function":true,"property-function":true,"length":2,"default":[0,0],"requires":["text-field"]},"text-allow-overlap":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["text-field"]},"text-ignore-placement":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["text-field"]},"text-optional":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":false,"requires":["text-field","icon-image"]},"visibility":{"type":"enum","function":"piecewise-constant","zoom-function":true,"values":["visible","none"],"default":"visible"}},"layout_raster":{"visibility":{"type":"enum","function":"piecewise-constant","zoom-function":true,"values":["visible","none"],"default":"visible"}},"filter":{"type":"array","value":"*"},"filter_operator":{"type":"enum","values":["==","!=",">",">=","<","<=","in","!in","all","any","none","has","!has"]},"geometry_type":{"type":"enum","values":["Point","LineString","Polygon"]},"color_operation":{"type":"enum","values":["lighten","saturate","spin","fade","mix"]},"function":{"stops":{"type":"array","required":true,"value":"function_stop"},"base":{"type":"number","default":1,"minimum":0},"property":{"type":"string","default":"$zoom"},"type":{"type":"enum","values":["exponential","interval","categorical"],"default":"exponential"}},"function_stop":{"type":"array","minimum":0,"maximum":22,"value":["number","color"],"length":2},"paint":["paint_fill","paint_line","paint_circle","paint_symbol","paint_raster","paint_background"],"paint_fill":{"fill-antialias":{"type":"boolean","function":"piecewise-constant","zoom-function":true,"property-function":true,"default":true},"fill-opacity":{"type":"number","function":"interpolated","zoom-function":true,"property-function":true,"default":1,"minimum":0,"maximum":1,"transition":true},"fill-color":{"type":"color","default":"#000000","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":[{"!":"fill-pattern"}]},"fill-outline-color":{"type":"color","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":[{"!":"fill-pattern"},{"fill-antialias":true}]},"fill-translate":{"type":"array","value":"number","length":2,"default":[0,0],"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"fill-translate-anchor":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"map","requires":["fill-translate"]},"fill-pattern":{"type":"string","function":"piecewise-constant","zoom-function":true,"property-function":true,"transition":true}},"paint_line":{"line-opacity":{"type":"number","function":"interpolated","zoom-function":true,"property-function":true,"default":1,"minimum":0,"maximum":1,"transition":true},"line-color":{"type":"color","default":"#000000","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":[{"!":"line-pattern"}]},"line-translate":{"type":"array","value":"number","length":2,"default":[0,0],"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"line-translate-anchor":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"map","requires":["line-translate"]},"line-width":{"type":"number","default":1,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"line-gap-width":{"type":"number","default":0,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"line-offset":{"type":"number","default":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"line-blur":{"type":"number","default":0,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"line-dasharray":{"type":"array","value":"number","function":"piecewise-constant","zoom-function":true,"property-function":true,"minimum":0,"transition":true,"units":"line widths","requires":[{"!":"line-pattern"}]},"line-pattern":{"type":"string","function":"piecewise-constant","zoom-function":true,"property-function":true,"transition":true}},"paint_circle":{"circle-radius":{"type":"number","default":5,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"circle-color":{"type":"color","default":"#000000","function":"interpolated","zoom-function":true,"property-function":true,"transition":true},"circle-blur":{"type":"number","default":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true},"circle-opacity":{"type":"number","default":1,"minimum":0,"maximum":1,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true},"circle-translate":{"type":"array","value":"number","length":2,"default":[0,0],"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels"},"circle-translate-anchor":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"map","requires":["circle-translate"]},"circle-pitch-scale":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"map"}},"paint_symbol":{"icon-opacity":{"type":"number","default":1,"minimum":0,"maximum":1,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":["icon-image"]},"icon-color":{"type":"color","default":"#000000","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":["icon-image"]},"icon-halo-color":{"type":"color","default":"rgba(0, 0, 0, 0)","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":["icon-image"]},"icon-halo-width":{"type":"number","default":0,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels","requires":["icon-image"]},"icon-halo-blur":{"type":"number","default":0,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels","requires":["icon-image"]},"icon-translate":{"type":"array","value":"number","length":2,"default":[0,0],"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels","requires":["icon-image"]},"icon-translate-anchor":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"map","requires":["icon-image","icon-translate"]},"text-opacity":{"type":"number","default":1,"minimum":0,"maximum":1,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":["text-field"]},"text-color":{"type":"color","default":"#000000","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":["text-field"]},"text-halo-color":{"type":"color","default":"rgba(0, 0, 0, 0)","function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"requires":["text-field"]},"text-halo-width":{"type":"number","default":0,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels","requires":["text-field"]},"text-halo-blur":{"type":"number","default":0,"minimum":0,"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels","requires":["text-field"]},"text-translate":{"type":"array","value":"number","length":2,"default":[0,0],"function":"interpolated","zoom-function":true,"property-function":true,"transition":true,"units":"pixels","requires":["text-field"]},"text-translate-anchor":{"type":"enum","function":"piecewise-constant","zoom-function":true,"property-function":true,"values":["map","viewport"],"default":"map","requires":["text-field","text-translate"]}},"paint_raster":{"raster-opacity":{"type":"number","default":1,"minimum":0,"maximum":1,"function":"interpolated","zoom-function":true,"transition":true},"raster-hue-rotate":{"type":"number","default":0,"period":360,"function":"interpolated","zoom-function":true,"transition":true,"units":"degrees"},"raster-brightness-min":{"type":"number","function":"interpolated","zoom-function":true,"default":0,"minimum":0,"maximum":1,"transition":true},"raster-brightness-max":{"type":"number","function":"interpolated","zoom-function":true,"default":1,"minimum":0,"maximum":1,"transition":true},"raster-saturation":{"type":"number","default":0,"minimum":-1,"maximum":1,"function":"interpolated","zoom-function":true,"transition":true},"raster-contrast":{"type":"number","default":0,"minimum":-1,"maximum":1,"function":"interpolated","zoom-function":true,"transition":true},"raster-fade-duration":{"type":"number","default":300,"minimum":0,"function":"interpolated","zoom-function":true,"transition":true,"units":"milliseconds"}},"paint_background":{"background-color":{"type":"color","default":"#000000","function":"interpolated","zoom-function":true,"transition":true,"requires":[{"!":"background-pattern"}]},"background-pattern":{"type":"string","function":"piecewise-constant","zoom-function":true,"transition":true},"background-opacity":{"type":"number","default":1,"minimum":0,"maximum":1,"function":"interpolated","zoom-function":true,"transition":true}},"transition":{"duration":{"type":"number","default":300,"minimum":0,"units":"milliseconds"},"delay":{"type":"number","default":0,"minimum":0,"units":"milliseconds"}}}
-},{}],68:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 'use strict';
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -22067,7 +22464,7 @@ function isWebGLSupported(failIfMajorPerformanceCaveat) {
     }
 }
 
-},{}],69:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -22163,7 +22560,7 @@ ArrayGroup.prototype.getTransferables = function(transferables) {
     }
 };
 
-},{"../util/util":183}],70:[function(require,module,exports){
+},{"../util/util":174}],61:[function(require,module,exports){
 'use strict';
 
 var featureFilter = require('feature-filter');
@@ -22681,7 +23078,7 @@ function createGetUniform(attribute, stopOffset) {
     };
 }
 
-},{"../util/struct_array":181,"../util/util":183,"./array_group":69,"./bucket/circle_bucket":71,"./bucket/fill_bucket":72,"./bucket/line_bucket":73,"./bucket/symbol_bucket":74,"./buffer_group":76,"assert":6,"feature-filter":13}],71:[function(require,module,exports){
+},{"../util/struct_array":172,"../util/util":174,"./array_group":60,"./bucket/circle_bucket":62,"./bucket/fill_bucket":63,"./bucket/line_bucket":64,"./bucket/symbol_bucket":65,"./buffer_group":67,"assert":6,"feature-filter":13}],62:[function(require,module,exports){
 'use strict';
 
 var Bucket = require('../bucket');
@@ -22803,7 +23200,7 @@ CircleBucket.prototype.addFeature = function(feature) {
     this.populatePaintArrays('circle', globalProperties, feature.properties, startGroup, startIndex);
 };
 
-},{"../../util/util":183,"../bucket":70,"../load_geometry":78}],72:[function(require,module,exports){
+},{"../../util/util":174,"../bucket":61,"../load_geometry":69}],63:[function(require,module,exports){
 'use strict';
 
 var Bucket = require('../bucket');
@@ -22914,7 +23311,7 @@ FillBucket.prototype.addPolygon = function(polygon) {
     }
 };
 
-},{"../../util/classify_rings":171,"../../util/util":183,"../bucket":70,"../load_geometry":78,"earcut":9}],73:[function(require,module,exports){
+},{"../../util/classify_rings":162,"../../util/util":174,"../bucket":61,"../load_geometry":69,"earcut":9}],64:[function(require,module,exports){
 'use strict';
 
 var Bucket = require('../bucket');
@@ -23341,7 +23738,7 @@ LineBucket.prototype.addPieSliceVertex = function(currentVertex, distance, extru
     }
 };
 
-},{"../../util/util":183,"../bucket":70,"../load_geometry":78}],74:[function(require,module,exports){
+},{"../../util/util":174,"../bucket":61,"../load_geometry":69}],65:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -23987,7 +24384,7 @@ SymbolBucket.prototype.addSymbolQuad = function(symbolQuad) {
         symbolQuad.minScale);
 };
 
-},{"../../symbol/anchor":132,"../../symbol/clip_line":134,"../../symbol/collision_feature":136,"../../symbol/get_anchors":138,"../../symbol/mergelines":141,"../../symbol/quads":142,"../../symbol/resolve_text":143,"../../symbol/shaping":144,"../../util/token":182,"../../util/util":183,"../bucket":70,"../load_geometry":78,"point-geometry":190}],75:[function(require,module,exports){
+},{"../../symbol/anchor":123,"../../symbol/clip_line":125,"../../symbol/collision_feature":127,"../../symbol/get_anchors":129,"../../symbol/mergelines":132,"../../symbol/quads":133,"../../symbol/resolve_text":134,"../../symbol/shaping":135,"../../util/token":173,"../../util/util":174,"../bucket":61,"../load_geometry":69,"point-geometry":181}],66:[function(require,module,exports){
 'use strict';
 
 module.exports = Buffer;
@@ -24088,7 +24485,7 @@ Buffer.BufferType = {
     ELEMENT: 'ELEMENT_ARRAY_BUFFER'
 };
 
-},{}],76:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -24143,7 +24540,7 @@ BufferGroup.prototype.destroy = function(gl) {
     }
 };
 
-},{"../render/vertex_array_object":98,"../util/util":183,"./buffer":75}],77:[function(require,module,exports){
+},{"../render/vertex_array_object":89,"../util/util":174,"./buffer":66}],68:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -24442,7 +24839,7 @@ function offsetLine(rings, offset) {
     return newRings;
 }
 
-},{"../util/dictionary_coder":173,"../util/intersection_tests":178,"../util/struct_array":181,"../util/util":183,"../util/vectortile_to_geojson":184,"./bucket":70,"./load_geometry":78,"feature-filter":13,"grid-index":35,"pbf":189,"point-geometry":190,"vector-tile":207}],78:[function(require,module,exports){
+},{"../util/dictionary_coder":164,"../util/intersection_tests":169,"../util/struct_array":172,"../util/util":174,"../util/vectortile_to_geojson":175,"./bucket":61,"./load_geometry":69,"feature-filter":13,"grid-index":26,"pbf":180,"point-geometry":181,"vector-tile":198}],69:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -24498,7 +24895,7 @@ module.exports = function loadGeometry(feature, bits) {
     return geometry;
 };
 
-},{"../util/util":183,"./bucket":70,"assert":6}],79:[function(require,module,exports){
+},{"../util/util":174,"./bucket":61,"assert":6}],70:[function(require,module,exports){
 'use strict';
 
 module.exports = Coordinate;
@@ -24577,7 +24974,7 @@ Coordinate.prototype = {
     }
 };
 
-},{}],80:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 'use strict';
 
 module.exports = LngLat;
@@ -24669,7 +25066,7 @@ LngLat.convert = function (input) {
     return input;
 };
 
-},{"../util/util":183}],81:[function(require,module,exports){
+},{"../util/util":174}],72:[function(require,module,exports){
 'use strict';
 
 module.exports = LngLatBounds;
@@ -24861,7 +25258,7 @@ LngLatBounds.convert = function (input) {
     return new LngLatBounds(input);
 };
 
-},{"./lng_lat":80}],82:[function(require,module,exports){
+},{"./lng_lat":71}],73:[function(require,module,exports){
 'use strict';
 
 var LngLat = require('./lng_lat'),
@@ -25335,7 +25732,7 @@ Transform.prototype = {
     }
 };
 
-},{"../data/bucket":70,"../source/tile_coord":110,"../util/interpolate":177,"../util/util":183,"./coordinate":79,"./lng_lat":80,"gl-matrix":25,"point-geometry":190}],83:[function(require,module,exports){
+},{"../data/bucket":61,"../source/tile_coord":101,"../util/interpolate":168,"../util/util":174,"./coordinate":70,"./lng_lat":71,"gl-matrix":25,"point-geometry":181}],74:[function(require,module,exports){
 'use strict';
 
 // Font data From Hershey Simplex Font
@@ -25468,7 +25865,7 @@ module.exports = function textVertices(text, left, baseline, scale) {
     return strokes;
 };
 
-},{}],84:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 'use strict';
 
 // jshint -W079
@@ -25535,7 +25932,7 @@ Object.defineProperty(mapboxgl, 'accessToken', {
  * mapboxgl.supported() // = true
  */
 
-},{"../package.json":185,"./geo/lng_lat":80,"./geo/lng_lat_bounds":81,"./style/style":119,"./ui/control/attribution":150,"./ui/control/control":151,"./ui/control/geolocate":152,"./ui/control/navigation":153,"./ui/map":162,"./ui/marker":163,"./ui/popup":164,"./util/ajax":166,"./util/browser":167,"./util/config":172,"./util/evented":175,"./util/util":183,"point-geometry":190}],85:[function(require,module,exports){
+},{"../package.json":176,"./geo/lng_lat":71,"./geo/lng_lat_bounds":72,"./style/style":110,"./ui/control/attribution":141,"./ui/control/control":142,"./ui/control/geolocate":143,"./ui/control/navigation":144,"./ui/map":153,"./ui/marker":154,"./ui/popup":155,"./util/ajax":157,"./util/browser":158,"./util/config":163,"./util/evented":166,"./util/util":174,"point-geometry":181}],76:[function(require,module,exports){
 'use strict';
 
 var assert = require('assert');
@@ -25555,7 +25952,7 @@ module.exports = function(uniforms) {
     return pragmas;
 };
 
-},{"assert":6}],86:[function(require,module,exports){
+},{"assert":6}],77:[function(require,module,exports){
 'use strict';
 
 var pixelsToTileUnits = require('../source/pixels_to_tile_units');
@@ -25648,7 +26045,7 @@ function drawBackground(painter, source, layer) {
     gl.stencilFunc(gl.EQUAL, 0x80, 0x80);
 }
 
-},{"../source/pixels_to_tile_units":104,"./create_uniform_pragmas":85}],87:[function(require,module,exports){
+},{"../source/pixels_to_tile_units":95,"./create_uniform_pragmas":76}],78:[function(require,module,exports){
 'use strict';
 
 var browser = require('../util/browser');
@@ -25713,7 +26110,7 @@ function drawCircles(painter, source, layer, coords) {
     }
 }
 
-},{"../util/browser":167}],88:[function(require,module,exports){
+},{"../util/browser":158}],79:[function(require,module,exports){
 'use strict';
 
 module.exports = drawCollisionDebug;
@@ -25748,7 +26145,7 @@ function drawCollisionDebug(painter, source, layer, coords) {
     }
 }
 
-},{}],89:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 'use strict';
 
 var textVertices = require('../lib/debugtext');
@@ -25809,7 +26206,7 @@ function drawDebugTile(painter, source, coord) {
     gl.drawArrays(gl.LINES, 0, debugTextBuffer.length);
 }
 
-},{"../data/bucket":70,"../data/buffer":75,"../lib/debugtext":83,"../util/browser":167,"./vertex_array_object":98,"gl-matrix":25}],90:[function(require,module,exports){
+},{"../data/bucket":61,"../data/buffer":66,"../lib/debugtext":74,"../util/browser":158,"./vertex_array_object":89,"gl-matrix":25}],81:[function(require,module,exports){
 'use strict';
 
 var pixelsToTileUnits = require('../source/pixels_to_tile_units');
@@ -26006,7 +26403,7 @@ function setPattern(image, opacity, tile, coord, painter, program) {
     painter.spriteAtlas.bind(gl, true);
 }
 
-},{"../source/pixels_to_tile_units":104}],91:[function(require,module,exports){
+},{"../source/pixels_to_tile_units":95}],82:[function(require,module,exports){
 'use strict';
 
 var browser = require('../util/browser');
@@ -26171,7 +26568,7 @@ module.exports = function drawLine(painter, source, layer, coords) {
 
 };
 
-},{"../source/pixels_to_tile_units":104,"../util/browser":167,"gl-matrix":25}],92:[function(require,module,exports){
+},{"../source/pixels_to_tile_units":95,"../util/browser":158,"gl-matrix":25}],83:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -26317,7 +26714,7 @@ function getOpacities(tile, parentTile, layer, transform) {
     return opacity;
 }
 
-},{"../util/struct_array":181,"../util/util":183}],93:[function(require,module,exports){
+},{"../util/struct_array":172,"../util/util":174}],84:[function(require,module,exports){
 'use strict';
 
 var browser = require('../util/browser');
@@ -26533,7 +26930,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, bufferGroups, isTex
     }
 }
 
-},{"../source/pixels_to_tile_units":104,"../util/browser":167,"./draw_collision_debug":88}],94:[function(require,module,exports){
+},{"../source/pixels_to_tile_units":95,"../util/browser":158,"./draw_collision_debug":79}],85:[function(require,module,exports){
 'use strict';
 
 module.exports = FrameHistory;
@@ -26605,7 +27002,7 @@ FrameHistory.prototype.bind = function(gl) {
     }
 };
 
-},{}],95:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -26752,7 +27149,7 @@ LineAtlas.prototype.bind = function(gl) {
     }
 };
 
-},{"../util/util":183}],96:[function(require,module,exports){
+},{"../util/util":174}],87:[function(require,module,exports){
 'use strict';
 
 var browser = require('../util/browser');
@@ -27096,7 +27493,7 @@ Painter.prototype.showOverdrawInspector = function(enabled) {
     }
 };
 
-},{"../data/bucket":70,"../data/buffer":75,"../source/pixels_to_tile_units":104,"../source/source_cache":108,"../util/browser":167,"../util/struct_array":181,"../util/util":183,"./create_uniform_pragmas":85,"./draw_background":86,"./draw_circle":87,"./draw_debug":89,"./draw_fill":90,"./draw_line":91,"./draw_raster":92,"./draw_symbol":93,"./frame_history":94,"./painter/use_program":97,"./vertex_array_object":98,"gl-matrix":25}],97:[function(require,module,exports){
+},{"../data/bucket":61,"../data/buffer":66,"../source/pixels_to_tile_units":95,"../source/source_cache":99,"../util/browser":158,"../util/struct_array":172,"../util/util":174,"./create_uniform_pragmas":76,"./draw_background":77,"./draw_circle":78,"./draw_debug":80,"./draw_fill":81,"./draw_line":82,"./draw_raster":83,"./draw_symbol":84,"./frame_history":85,"./painter/use_program":88,"./vertex_array_object":89,"gl-matrix":25}],88:[function(require,module,exports){
 'use strict';
 
 var assert = require('assert');
@@ -27193,7 +27590,7 @@ function applyPragmas(source, pragmas) {
     });
 }
 
-},{"../../util/util":183,"assert":6,"mapbox-gl-shaders":44}],98:[function(require,module,exports){
+},{"../../util/util":174,"assert":6,"mapbox-gl-shaders":35}],89:[function(require,module,exports){
 'use strict';
 
 var assert = require('assert');
@@ -27291,7 +27688,7 @@ VertexArrayObject.prototype.destroy = function(gl) {
     }
 };
 
-},{"assert":6}],99:[function(require,module,exports){
+},{"assert":6}],90:[function(require,module,exports){
 'use strict';
 
 var Evented = require('../util/evented');
@@ -27515,7 +27912,7 @@ GeoJSONSource.prototype = util.inherit(Evented, /** @lends GeoJSONSource.prototy
     }
 });
 
-},{"../data/bucket":70,"../util/evented":175,"../util/util":183,"resolve-url":197}],100:[function(require,module,exports){
+},{"../data/bucket":61,"../util/evented":166,"../util/util":174,"resolve-url":188}],91:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -27653,7 +28050,7 @@ GeoJSONWorkerSource.prototype = util.inherit(VectorTileWorkerSource, /** @lends 
     }
 });
 
-},{"../util/ajax":166,"../util/util":183,"./geojson_wrapper":101,"./vector_tile_worker_source":112,"geojson-rewind":15,"geojson-vt":19,"supercluster":199,"vt-pbf":211}],101:[function(require,module,exports){
+},{"../util/ajax":157,"../util/util":174,"./geojson_wrapper":92,"./vector_tile_worker_source":103,"geojson-rewind":15,"geojson-vt":19,"supercluster":190,"vt-pbf":202}],92:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -27729,7 +28126,7 @@ FeatureWrapper.prototype.bbox = function() {
 
 FeatureWrapper.prototype.toGeoJSON = VectorTileFeature.prototype.toGeoJSON;
 
-},{"../data/bucket":70,"point-geometry":190,"vector-tile":207}],102:[function(require,module,exports){
+},{"../data/bucket":61,"point-geometry":181,"vector-tile":198}],93:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -27908,7 +28305,7 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
     }
 });
 
-},{"../data/bucket":70,"../data/buffer":75,"../geo/lng_lat":80,"../render/draw_raster":92,"../render/vertex_array_object":98,"../util/ajax":166,"../util/evented":175,"../util/util":183,"./tile_coord":110,"point-geometry":190}],103:[function(require,module,exports){
+},{"../data/bucket":61,"../data/buffer":66,"../geo/lng_lat":71,"../render/draw_raster":83,"../render/vertex_array_object":89,"../util/ajax":157,"../util/evented":166,"../util/util":174,"./tile_coord":101,"point-geometry":181}],94:[function(require,module,exports){
 'use strict';
 var util = require('../util/util');
 var ajax = require('../util/ajax');
@@ -27939,7 +28336,7 @@ module.exports = function(options, callback) {
 };
 
 
-},{"../util/ajax":166,"../util/browser":167,"../util/mapbox":180,"../util/util":183}],104:[function(require,module,exports){
+},{"../util/ajax":157,"../util/browser":158,"../util/mapbox":171,"../util/util":174}],95:[function(require,module,exports){
 'use strict';
 
 var Bucket = require('../data/bucket');
@@ -27964,7 +28361,7 @@ module.exports = function(tile, pixelValue, z) {
 };
 
 
-},{"../data/bucket":70}],105:[function(require,module,exports){
+},{"../data/bucket":61}],96:[function(require,module,exports){
 'use strict';
 var TileCoord = require('./tile_coord');
 
@@ -28035,7 +28432,7 @@ function mergeRenderedFeatureLayers(tiles) {
 }
 
 
-},{"./tile_coord":110}],106:[function(require,module,exports){
+},{"./tile_coord":101}],97:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -28132,7 +28529,7 @@ RasterTileSource.prototype = util.inherit(Evented, {
     }
 });
 
-},{"../util/ajax":166,"../util/evented":175,"../util/mapbox":180,"../util/util":183,"./load_tilejson":103}],107:[function(require,module,exports){
+},{"../util/ajax":157,"../util/evented":166,"../util/mapbox":171,"../util/util":174,"./load_tilejson":94}],98:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -28303,7 +28700,7 @@ exports.setType = function (name, type) {
  * @instance
  */
 
-},{"../source/geojson_source":99,"../source/image_source":102,"../source/raster_tile_source":106,"../source/vector_tile_source":111,"../source/video_source":113,"../util/util":183}],108:[function(require,module,exports){
+},{"../source/geojson_source":90,"../source/image_source":93,"../source/raster_tile_source":97,"../source/vector_tile_source":102,"../source/video_source":104,"../util/util":174}],99:[function(require,module,exports){
 'use strict';
 
 var Source = require('./source');
@@ -28841,7 +29238,7 @@ function compareKeyZoom(a, b) {
     return (a % 32) - (b % 32);
 }
 
-},{"../data/bucket":70,"../geo/coordinate":79,"../util/evented":175,"../util/lru_cache":179,"../util/util":183,"./source":107,"./tile":109,"./tile_coord":110}],109:[function(require,module,exports){
+},{"../data/bucket":61,"../geo/coordinate":70,"../util/evented":166,"../util/lru_cache":170,"../util/util":174,"./source":98,"./tile":100,"./tile_coord":101}],100:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -29043,7 +29440,7 @@ function unserializeBuckets(input, style) {
     return output;
 }
 
-},{"../data/bucket":70,"../data/feature_index":77,"../symbol/collision_box":135,"../symbol/collision_tile":137,"../symbol/symbol_instances":146,"../symbol/symbol_quads":147,"../util/util":183,"../util/vectortile_to_geojson":184,"feature-filter":13,"pbf":189,"vector-tile":207}],110:[function(require,module,exports){
+},{"../data/bucket":61,"../data/feature_index":68,"../symbol/collision_box":126,"../symbol/collision_tile":128,"../symbol/symbol_instances":137,"../symbol/symbol_quads":138,"../util/util":174,"../util/vectortile_to_geojson":175,"feature-filter":13,"pbf":180,"vector-tile":198}],101:[function(require,module,exports){
 'use strict';
 
 var assert = require('assert');
@@ -29237,7 +29634,7 @@ TileCoord.cover = function(z, bounds, actualZ) {
     });
 };
 
-},{"../geo/coordinate":79,"assert":6,"whoots-js":216}],111:[function(require,module,exports){
+},{"../geo/coordinate":70,"assert":6,"whoots-js":207}],102:[function(require,module,exports){
 'use strict';
 
 var Evented = require('../util/evented');
@@ -29344,7 +29741,7 @@ VectorTileSource.prototype = util.inherit(Evented, {
     }
 });
 
-},{"../util/evented":175,"../util/mapbox":180,"../util/util":183,"./load_tilejson":103}],112:[function(require,module,exports){
+},{"../util/evented":166,"../util/mapbox":171,"../util/util":174,"./load_tilejson":94}],103:[function(require,module,exports){
 'use strict';
 var ajax = require('../util/ajax');
 var vt = require('vector-tile');
@@ -29492,7 +29889,7 @@ VectorTileWorkerSource.prototype = {
     }
 };
 
-},{"../util/ajax":166,"./worker_tile":115,"pbf":189,"vector-tile":207}],113:[function(require,module,exports){
+},{"../util/ajax":157,"./worker_tile":106,"pbf":180,"vector-tile":198}],104:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -29696,7 +30093,7 @@ VideoSource.prototype = util.inherit(Evented, /** @lends VideoSource.prototype *
     }
 });
 
-},{"../data/bucket":70,"../data/buffer":75,"../geo/lng_lat":80,"../render/draw_raster":92,"../render/vertex_array_object":98,"../util/ajax":166,"../util/evented":175,"../util/util":183,"./tile_coord":110,"point-geometry":190}],114:[function(require,module,exports){
+},{"../data/bucket":61,"../data/buffer":66,"../geo/lng_lat":71,"../render/draw_raster":83,"../render/vertex_array_object":89,"../util/ajax":157,"../util/evented":166,"../util/util":174,"./tile_coord":101,"point-geometry":181}],105:[function(require,module,exports){
 'use strict';
 
 var Actor = require('../util/actor');
@@ -29860,7 +30257,7 @@ function createLayerFamilies(layers) {
     return families;
 }
 
-},{"../style/style_layer":122,"../util/actor":165,"../util/util":183,"./geojson_worker_source":100,"./vector_tile_worker_source":112}],115:[function(require,module,exports){
+},{"../style/style_layer":113,"../util/actor":156,"../util/util":174,"./geojson_worker_source":91,"./vector_tile_worker_source":103}],106:[function(require,module,exports){
 'use strict';
 
 var FeatureIndex = require('../data/feature_index');
@@ -30133,7 +30530,7 @@ function getLayerId(layer) {
     return layer.id;
 }
 
-},{"../data/bucket":70,"../data/feature_index":77,"../symbol/collision_box":135,"../symbol/collision_tile":137,"../symbol/symbol_instances":146,"../symbol/symbol_quads":147,"../util/dictionary_coder":173,"../util/util":183}],116:[function(require,module,exports){
+},{"../data/bucket":61,"../data/feature_index":68,"../symbol/collision_box":126,"../symbol/collision_tile":128,"../symbol/symbol_instances":137,"../symbol/symbol_quads":138,"../util/dictionary_coder":164,"../util/util":174}],107:[function(require,module,exports){
 'use strict';
 
 module.exports = AnimationLoop;
@@ -30165,7 +30562,7 @@ AnimationLoop.prototype.cancel = function(n) {
     });
 };
 
-},{}],117:[function(require,module,exports){
+},{}],108:[function(require,module,exports){
 'use strict';
 
 var Evented = require('../util/evented');
@@ -30246,7 +30643,7 @@ ImageSprite.prototype.getSpritePosition = function(name) {
     return new SpritePosition();
 };
 
-},{"../util/ajax":166,"../util/browser":167,"../util/evented":175,"../util/mapbox":180}],118:[function(require,module,exports){
+},{"../util/ajax":157,"../util/browser":158,"../util/evented":166,"../util/mapbox":171}],109:[function(require,module,exports){
 'use strict';
 
 var parseColorString = require('csscolorparser').parseCSSColor;
@@ -30288,7 +30685,7 @@ module.exports = function parseColor(input) {
     }
 };
 
-},{"../util/util":183,"./style_function":121,"csscolorparser":7}],119:[function(require,module,exports){
+},{"../util/util":174,"./style_function":112,"csscolorparser":7}],110:[function(require,module,exports){
 'use strict';
 
 var Evented = require('../util/evented');
@@ -31069,7 +31466,7 @@ Style.prototype = util.inherit(Evented, {
 });
 
 
-},{"../render/line_atlas":95,"../source/query_features":105,"../source/source":107,"../source/source_cache":108,"../symbol/glyph_source":140,"../symbol/sprite_atlas":145,"../util/ajax":166,"../util/browser":167,"../util/dispatcher":174,"../util/evented":175,"../util/mapbox":180,"../util/util":183,"./animation_loop":116,"./image_sprite":117,"./style_function":121,"./style_layer":122,"./style_spec":129,"./validate_style":131}],120:[function(require,module,exports){
+},{"../render/line_atlas":86,"../source/query_features":96,"../source/source":98,"../source/source_cache":99,"../symbol/glyph_source":131,"../symbol/sprite_atlas":136,"../util/ajax":157,"../util/browser":158,"../util/dispatcher":165,"../util/evented":166,"../util/mapbox":171,"../util/util":174,"./animation_loop":107,"./image_sprite":108,"./style_function":112,"./style_layer":113,"./style_spec":120,"./validate_style":122}],111:[function(require,module,exports){
 'use strict';
 
 var MapboxGLFunction = require('./style_function');
@@ -31153,7 +31550,7 @@ function transitioned(calculate) {
     };
 }
 
-},{"../util/util":183,"./parse_color":118,"./style_function":121}],121:[function(require,module,exports){
+},{"../util/util":174,"./parse_color":109,"./style_function":112}],112:[function(require,module,exports){
 'use strict';
 
 var MapboxGLFunction = require('mapbox-gl-function');
@@ -31180,7 +31577,7 @@ exports['piecewise-constant'] = function(parameters) {
 
 exports.isFunctionDefinition = MapboxGLFunction.isFunctionDefinition;
 
-},{"mapbox-gl-function":43}],122:[function(require,module,exports){
+},{"mapbox-gl-function":34}],113:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -31527,7 +31924,7 @@ function getDeclarationValue(declaration) {
     return declaration.value;
 }
 
-},{"../util/evented":175,"../util/util":183,"./parse_color":118,"./style_declaration":120,"./style_layer/background_style_layer":123,"./style_layer/circle_style_layer":124,"./style_layer/fill_style_layer":125,"./style_layer/line_style_layer":126,"./style_layer/raster_style_layer":127,"./style_layer/symbol_style_layer":128,"./style_spec":129,"./style_transition":130,"./validate_style":131}],123:[function(require,module,exports){
+},{"../util/evented":166,"../util/util":174,"./parse_color":109,"./style_declaration":111,"./style_layer/background_style_layer":114,"./style_layer/circle_style_layer":115,"./style_layer/fill_style_layer":116,"./style_layer/line_style_layer":117,"./style_layer/raster_style_layer":118,"./style_layer/symbol_style_layer":119,"./style_spec":120,"./style_transition":121,"./validate_style":122}],114:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -31541,7 +31938,7 @@ module.exports = BackgroundStyleLayer;
 
 BackgroundStyleLayer.prototype = util.inherit(StyleLayer, {});
 
-},{"../../util/util":183,"../style_layer":122}],124:[function(require,module,exports){
+},{"../../util/util":174,"../style_layer":113}],115:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -31555,7 +31952,7 @@ module.exports = CircleStyleLayer;
 
 CircleStyleLayer.prototype = util.inherit(StyleLayer, {});
 
-},{"../../util/util":183,"../style_layer":122}],125:[function(require,module,exports){
+},{"../../util/util":174,"../style_layer":113}],116:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -31611,7 +32008,7 @@ FillStyleLayer.prototype = util.inherit(StyleLayer, {
 
 module.exports = FillStyleLayer;
 
-},{"../../util/util":183,"../style_layer":122}],126:[function(require,module,exports){
+},{"../../util/util":174,"../style_layer":113}],117:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -31645,7 +32042,7 @@ LineStyleLayer.prototype = util.inherit(StyleLayer, {
     }
 });
 
-},{"../../util/util":183,"../style_layer":122}],127:[function(require,module,exports){
+},{"../../util/util":174,"../style_layer":113}],118:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -31659,7 +32056,7 @@ module.exports = RasterStyleLayer;
 
 RasterStyleLayer.prototype = util.inherit(StyleLayer, {});
 
-},{"../../util/util":183,"../style_layer":122}],128:[function(require,module,exports){
+},{"../../util/util":174,"../style_layer":113}],119:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -31702,12 +32099,12 @@ SymbolStyleLayer.prototype = util.inherit(StyleLayer, {
 
 });
 
-},{"../../util/util":183,"../style_layer":122}],129:[function(require,module,exports){
+},{"../../util/util":174,"../style_layer":113}],120:[function(require,module,exports){
 'use strict';
 
 module.exports = require('mapbox-gl-style-spec/reference/latest.min');
 
-},{"mapbox-gl-style-spec/reference/latest.min":66}],130:[function(require,module,exports){
+},{"mapbox-gl-style-spec/reference/latest.min":57}],121:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -31792,7 +32189,7 @@ function interpZoomTransitioned(from, to, t) {
     }
 }
 
-},{"../util/interpolate":177,"../util/util":183}],131:[function(require,module,exports){
+},{"../util/interpolate":168,"../util/util":174}],122:[function(require,module,exports){
 'use strict';
 
 module.exports = require('mapbox-gl-style-spec/lib/validate_style.min');
@@ -31816,7 +32213,7 @@ module.exports.throwErrors = function throwErrors(emitter, errors) {
     }
 };
 
-},{"mapbox-gl-style-spec/lib/validate_style.min":65}],132:[function(require,module,exports){
+},{"mapbox-gl-style-spec/lib/validate_style.min":56}],123:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -31839,7 +32236,7 @@ Anchor.prototype.clone = function() {
     return new Anchor(this.x, this.y, this.angle, this.segment);
 };
 
-},{"point-geometry":190}],133:[function(require,module,exports){
+},{"point-geometry":181}],124:[function(require,module,exports){
 'use strict';
 
 module.exports = checkMaxAngle;
@@ -31919,7 +32316,7 @@ function checkMaxAngle(line, anchor, labelLength, windowSize, maxAngle) {
     return true;
 }
 
-},{}],134:[function(require,module,exports){
+},{}],125:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -31993,7 +32390,7 @@ function clipLine(lines, x1, y1, x2, y2) {
     return clippedLines;
 }
 
-},{"point-geometry":190}],135:[function(require,module,exports){
+},{"point-geometry":181}],126:[function(require,module,exports){
 'use strict';
 
 var StructArrayType = require('../util/struct_array');
@@ -32074,7 +32471,7 @@ util.extendAll(CollisionBoxArray.prototype.StructType.prototype, {
     }
 });
 
-},{"../util/struct_array":181,"../util/util":183,"point-geometry":190}],136:[function(require,module,exports){
+},{"../util/struct_array":172,"../util/util":174,"point-geometry":181}],127:[function(require,module,exports){
 'use strict';
 
 module.exports = CollisionFeature;
@@ -32208,7 +32605,7 @@ CollisionFeature.prototype._addLineCollisionBoxes = function(collisionBoxArray, 
     return bboxes;
 };
 
-},{}],137:[function(require,module,exports){
+},{}],128:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -32509,7 +32906,7 @@ CollisionTile.prototype.insertCollisionFeature = function(collisionFeature, minP
     }
 };
 
-},{"../data/bucket":70,"grid-index":35,"point-geometry":190}],138:[function(require,module,exports){
+},{"../data/bucket":61,"grid-index":26,"point-geometry":181}],129:[function(require,module,exports){
 'use strict';
 
 var interpolate = require('../util/interpolate');
@@ -32613,7 +33010,7 @@ function resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength,
     return anchors;
 }
 
-},{"../symbol/anchor":132,"../util/interpolate":177,"./check_max_angle":133}],139:[function(require,module,exports){
+},{"../symbol/anchor":123,"../util/interpolate":168,"./check_max_angle":124}],130:[function(require,module,exports){
 'use strict';
 
 var ShelfPack = require('shelf-pack');
@@ -32782,7 +33179,7 @@ GlyphAtlas.prototype.updateTexture = function(gl) {
     }
 };
 
-},{"../util/util":183,"shelf-pack":198}],140:[function(require,module,exports){
+},{"../util/util":174,"shelf-pack":189}],131:[function(require,module,exports){
 'use strict';
 
 var normalizeURL = require('../util/mapbox').normalizeGlyphsURL;
@@ -32923,7 +33320,7 @@ function glyphUrl(fontstack, range, url, subdomains) {
         .replace('{range}', range);
 }
 
-},{"../symbol/glyph_atlas":139,"../util/ajax":166,"../util/glyphs":176,"../util/mapbox":180,"pbf":189}],141:[function(require,module,exports){
+},{"../symbol/glyph_atlas":130,"../util/ajax":157,"../util/glyphs":167,"../util/mapbox":171,"pbf":180}],132:[function(require,module,exports){
 'use strict';
 
 module.exports = function (features, textFeatures, geometries) {
@@ -33014,7 +33411,7 @@ module.exports = function (features, textFeatures, geometries) {
     };
 };
 
-},{}],142:[function(require,module,exports){
+},{}],133:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -33297,7 +33694,7 @@ function getSegmentGlyphs(glyphs, anchor, offset, line, segment, forward) {
     return placementScale;
 }
 
-},{"point-geometry":190}],143:[function(require,module,exports){
+},{"point-geometry":181}],134:[function(require,module,exports){
 'use strict';
 
 var resolveTokens = require('../util/token');
@@ -33340,7 +33737,7 @@ function resolveText(features, layoutProperties, codepoints) {
     return textFeatures;
 }
 
-},{"../util/token":182}],144:[function(require,module,exports){
+},{"../util/token":173}],135:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -33521,7 +33918,7 @@ function PositionedIcon(image, top, bottom, left, right) {
     this.right = right;
 }
 
-},{}],145:[function(require,module,exports){
+},{}],136:[function(require,module,exports){
 'use strict';
 
 var ShelfPack = require('shelf-pack');
@@ -33754,7 +34151,7 @@ function AtlasImage(rect, width, height, sdf, pixelRatio) {
     this.pixelRatio = pixelRatio;
 }
 
-},{"../util/browser":167,"../util/util":183,"shelf-pack":198}],146:[function(require,module,exports){
+},{"../util/browser":158,"../util/util":174,"shelf-pack":189}],137:[function(require,module,exports){
 'use strict';
 
 var StructArrayType = require('../util/struct_array');
@@ -33799,7 +34196,7 @@ util.extendAll(SymbolInstancesArray.prototype.StructType.prototype, {
 
 
 
-},{"../util/struct_array":181,"../util/util":183,"point-geometry":190}],147:[function(require,module,exports){
+},{"../util/struct_array":172,"../util/util":174,"point-geometry":181}],138:[function(require,module,exports){
 'use strict';
 
 var StructArrayType = require('../util/struct_array');
@@ -33873,7 +34270,7 @@ util.extendAll(SymbolQuadsArray.prototype.StructType.prototype, {
 });
 
 
-},{"../util/struct_array":181,"../util/util":183,"./quads":142,"point-geometry":190}],148:[function(require,module,exports){
+},{"../util/struct_array":172,"../util/util":174,"./quads":133,"point-geometry":181}],139:[function(require,module,exports){
 'use strict';
 
 var DOM = require('../util/dom');
@@ -34048,7 +34445,7 @@ module.exports = function bindHandlers(map, options) {
  *   property.
  */
 
-},{"../util/dom":169,"./handler/box_zoom":154,"./handler/dblclick_zoom":155,"./handler/drag_pan":156,"./handler/drag_rotate":157,"./handler/keyboard":158,"./handler/scroll_zoom":159,"./handler/touch_zoom_rotate":160,"point-geometry":190}],149:[function(require,module,exports){
+},{"../util/dom":160,"./handler/box_zoom":145,"./handler/dblclick_zoom":146,"./handler/drag_pan":147,"./handler/drag_rotate":148,"./handler/keyboard":149,"./handler/scroll_zoom":150,"./handler/touch_zoom_rotate":151,"point-geometry":181}],140:[function(require,module,exports){
 'use strict';
 
 var util = require('../util/util');
@@ -34835,7 +35232,7 @@ util.extend(Camera.prototype, /** @lends Map.prototype */{
  * @property {MapEventData} data
  */
 
-},{"../geo/lng_lat":80,"../geo/lng_lat_bounds":81,"../util/browser":167,"../util/interpolate":177,"../util/util":183,"point-geometry":190}],150:[function(require,module,exports){
+},{"../geo/lng_lat":71,"../geo/lng_lat_bounds":72,"../util/browser":158,"../util/interpolate":168,"../util/util":174,"point-geometry":181}],141:[function(require,module,exports){
 'use strict';
 
 var Control = require('./control');
@@ -34918,7 +35315,7 @@ Attribution.prototype = util.inherit(Control, {
     }
 });
 
-},{"../../util/dom":169,"../../util/util":183,"./control":151}],151:[function(require,module,exports){
+},{"../../util/dom":160,"../../util/util":174,"./control":142}],142:[function(require,module,exports){
 'use strict';
 
 var util = require('../../util/util');
@@ -34973,7 +35370,7 @@ Control.prototype = {
 
 util.extend(Control.prototype, Evented);
 
-},{"../../util/evented":175,"../../util/util":183}],152:[function(require,module,exports){
+},{"../../util/evented":166,"../../util/util":174}],143:[function(require,module,exports){
 'use strict';
 
 var Control = require('./control');
@@ -35075,7 +35472,7 @@ Geolocate.prototype = util.inherit(Control, {
  *
  */
 
-},{"../../util/browser":167,"../../util/dom":169,"../../util/util":183,"./control":151}],153:[function(require,module,exports){
+},{"../../util/browser":158,"../../util/dom":160,"../../util/util":174,"./control":142}],144:[function(require,module,exports){
 'use strict';
 
 var Control = require('./control');
@@ -35196,7 +35593,7 @@ function copyMouseEvent(e) {
     });
 }
 
-},{"../../util/dom":169,"../../util/util":183,"./control":151}],154:[function(require,module,exports){
+},{"../../util/dom":160,"../../util/util":174,"./control":142}],145:[function(require,module,exports){
 'use strict';
 
 var DOM = require('../../util/dom'),
@@ -35383,7 +35780,7 @@ BoxZoomHandler.prototype = {
  * @property {MapBoxZoomEvent} data
  */
 
-},{"../../geo/lng_lat_bounds":81,"../../util/dom":169,"../../util/util":183}],155:[function(require,module,exports){
+},{"../../geo/lng_lat_bounds":72,"../../util/dom":160,"../../util/util":174}],146:[function(require,module,exports){
 'use strict';
 
 module.exports = DoubleClickZoomHandler;
@@ -35446,7 +35843,7 @@ DoubleClickZoomHandler.prototype = {
     }
 };
 
-},{}],156:[function(require,module,exports){
+},{}],147:[function(require,module,exports){
 'use strict';
 
 var DOM = require('../../util/dom'),
@@ -35682,7 +36079,7 @@ DragPanHandler.prototype = {
  * @property {MapMouseEvent | MapTouchEvent} data
  */
 
-},{"../../util/dom":169,"../../util/util":183}],157:[function(require,module,exports){
+},{"../../util/dom":160,"../../util/util":174}],148:[function(require,module,exports){
 'use strict';
 
 var DOM = require('../../util/dom'),
@@ -35936,7 +36333,7 @@ DragRotateHandler.prototype = {
  * @property {MapMouseEvent | MapTouchEvent} data
  */
 
-},{"../../util/dom":169,"../../util/util":183,"point-geometry":190}],158:[function(require,module,exports){
+},{"../../util/dom":160,"../../util/util":174,"point-geometry":181}],149:[function(require,module,exports){
 'use strict';
 
 module.exports = KeyboardHandler;
@@ -36068,7 +36465,7 @@ KeyboardHandler.prototype = {
     }
 };
 
-},{}],159:[function(require,module,exports){
+},{}],150:[function(require,module,exports){
 'use strict';
 
 var DOM = require('../../util/dom'),
@@ -36251,7 +36648,7 @@ ScrollZoomHandler.prototype = {
  * @property {MapMouseEvent | MapTouchEvent} data
  */
 
-},{"../../util/browser":167,"../../util/dom":169,"../../util/util":183}],160:[function(require,module,exports){
+},{"../../util/browser":158,"../../util/dom":160,"../../util/util":174}],151:[function(require,module,exports){
 'use strict';
 
 var DOM = require('../../util/dom'),
@@ -36466,7 +36863,7 @@ TouchZoomRotateHandler.prototype = {
     }
 };
 
-},{"../../util/dom":169,"../../util/util":183}],161:[function(require,module,exports){
+},{"../../util/dom":160,"../../util/util":174}],152:[function(require,module,exports){
 'use strict';
 
 /*
@@ -36541,7 +36938,7 @@ Hash.prototype = {
     }
 };
 
-},{"../util/util":183}],162:[function(require,module,exports){
+},{"../util/util":174}],153:[function(require,module,exports){
 'use strict';
 
 var Canvas = require('../util/canvas');
@@ -37981,7 +38378,7 @@ function removeNode(node) {
   * @property {{error: {message: string}}} data
   */
 
-},{"../geo/lng_lat":80,"../geo/lng_lat_bounds":81,"../geo/transform":82,"../render/painter":96,"../style/animation_loop":116,"../style/style":119,"../util/browser":167,"../util/canvas":168,"../util/dom":169,"../util/evented":175,"../util/util":183,"./bind_handlers":148,"./camera":149,"./control/attribution":150,"./hash":161,"point-geometry":190}],163:[function(require,module,exports){
+},{"../geo/lng_lat":71,"../geo/lng_lat_bounds":72,"../geo/transform":73,"../render/painter":87,"../style/animation_loop":107,"../style/style":110,"../util/browser":158,"../util/canvas":159,"../util/dom":160,"../util/evented":166,"../util/util":174,"./bind_handlers":139,"./camera":140,"./control/attribution":141,"./hash":152,"point-geometry":181}],154:[function(require,module,exports){
 /* eslint-disable */
 'use strict';
 
@@ -38076,7 +38473,7 @@ Marker.prototype = {
     }
 };
 
-},{"../geo/lng_lat":80,"../util/dom":169,"point-geometry":190}],164:[function(require,module,exports){
+},{"../geo/lng_lat":71,"../util/dom":160,"point-geometry":181}],155:[function(require,module,exports){
 'use strict';
 
 module.exports = Popup;
@@ -38330,7 +38727,7 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
     }
 });
 
-},{"../geo/lng_lat":80,"../util/dom":169,"../util/evented":175,"../util/util":183}],165:[function(require,module,exports){
+},{"../geo/lng_lat":71,"../util/dom":160,"../util/evented":166,"../util/util":174}],156:[function(require,module,exports){
 'use strict';
 
 module.exports = Actor;
@@ -38402,7 +38799,7 @@ Actor.prototype.postMessage = function(message, transferList) {
     this.target.postMessage(message, transferList);
 };
 
-},{}],166:[function(require,module,exports){
+},{}],157:[function(require,module,exports){
 'use strict';
 
 exports.getJSON = function(url, callback) {
@@ -38492,7 +38889,7 @@ exports.getVideo = function(urls, callback) {
     return video;
 };
 
-},{}],167:[function(require,module,exports){
+},{}],158:[function(require,module,exports){
 'use strict';
 
 /**
@@ -38587,7 +38984,7 @@ webpImgTest.src = 'data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAQAAAAfQ//
 
 exports.supportsGeolocation = !!navigator.geolocation;
 
-},{"mapbox-gl-supported":68}],168:[function(require,module,exports){
+},{"mapbox-gl-supported":59}],159:[function(require,module,exports){
 'use strict';
 
 var util = require('../util');
@@ -38631,7 +39028,7 @@ Canvas.prototype.getElement = function() {
     return this.canvas;
 };
 
-},{"../util":183,"mapbox-gl-supported":68}],169:[function(require,module,exports){
+},{"../util":174,"mapbox-gl-supported":59}],160:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -38706,7 +39103,7 @@ exports.touchPos = function (el, e) {
     return points;
 };
 
-},{"point-geometry":190}],170:[function(require,module,exports){
+},{"point-geometry":181}],161:[function(require,module,exports){
 'use strict';
 var WebWorkify = require('webworkify');
 
@@ -38714,7 +39111,7 @@ module.exports = function () {
     return new WebWorkify(require('../../source/worker'));
 };
 
-},{"../../source/worker":114,"webworkify":214}],171:[function(require,module,exports){
+},{"../../source/worker":105,"webworkify":205}],162:[function(require,module,exports){
 'use strict';
 
 var quickselect = require('quickselect');
@@ -38774,7 +39171,7 @@ function calculateSignedArea(ring) {
     return sum;
 }
 
-},{"quickselect":196}],172:[function(require,module,exports){
+},{"quickselect":187}],163:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -38782,7 +39179,7 @@ module.exports = {
     REQUIRE_ACCESS_TOKEN: true
 };
 
-},{}],173:[function(require,module,exports){
+},{}],164:[function(require,module,exports){
 'use strict';
 
 var assert = require('assert');
@@ -38809,7 +39206,7 @@ DictionaryCoder.prototype.decode = function(n) {
     return this._numberToString[n];
 };
 
-},{"assert":6}],174:[function(require,module,exports){
+},{"assert":6}],165:[function(require,module,exports){
 'use strict';
 
 var util = require('./util');
@@ -38884,7 +39281,7 @@ Dispatcher.prototype = {
     }
 };
 
-},{"./actor":165,"./util":183,"./web_worker":170}],175:[function(require,module,exports){
+},{"./actor":156,"./util":174,"./web_worker":161}],166:[function(require,module,exports){
 'use strict';
 
 var util = require('./util');
@@ -39007,7 +39404,7 @@ var Evented = {
 
 module.exports = Evented;
 
-},{"./util":183}],176:[function(require,module,exports){
+},{"./util":174}],167:[function(require,module,exports){
 'use strict';
 
 module.exports = Glyphs;
@@ -39042,7 +39439,7 @@ function readGlyph(tag, glyph, pbf) {
     else if (tag === 7) glyph.advance = pbf.readVarint();
 }
 
-},{}],177:[function(require,module,exports){
+},{}],168:[function(require,module,exports){
 'use strict';
 
 module.exports = interpolate;
@@ -39083,7 +39480,7 @@ interpolate.array = function(from, to, t) {
     });
 };
 
-},{}],178:[function(require,module,exports){
+},{}],169:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -39249,7 +39646,7 @@ function polygonContainsPoint(ring, p) {
     return c;
 }
 
-},{}],179:[function(require,module,exports){
+},{}],170:[function(require,module,exports){
 'use strict';
 
 module.exports = LRUCache;
@@ -39374,7 +39771,7 @@ LRUCache.prototype.setMaxSize = function(max) {
     return this;
 };
 
-},{}],180:[function(require,module,exports){
+},{}],171:[function(require,module,exports){
 'use strict';
 
 var config = require('./config');
@@ -39502,7 +39899,7 @@ function replaceTempAccessToken(query) {
     }
 }
 
-},{"./browser":167,"./config":172,"./util":183,"url":202}],181:[function(require,module,exports){
+},{"./browser":158,"./config":163,"./util":174,"url":193}],172:[function(require,module,exports){
 'use strict';
 
 // Note: all "sizes" are measured in bytes
@@ -39850,7 +40247,7 @@ StructArray.prototype.toArray = function(startIndex, endIndex) {
     return array;
 };
 
-},{"assert":6}],182:[function(require,module,exports){
+},{"assert":6}],173:[function(require,module,exports){
 'use strict';
 
 module.exports = resolveTokens;
@@ -39869,7 +40266,7 @@ function resolveTokens(properties, text) {
     });
 }
 
-},{}],183:[function(require,module,exports){
+},{}],174:[function(require,module,exports){
 'use strict';
 
 var UnitBezier = require('unitbezier');
@@ -40328,7 +40725,7 @@ exports.warnOnce = function(message) {
     }
 };
 
-},{"../geo/coordinate":79,"unitbezier":201}],184:[function(require,module,exports){
+},{"../geo/coordinate":70,"unitbezier":192}],175:[function(require,module,exports){
 'use strict';
 
 module.exports = Feature;
@@ -40373,54 +40770,31 @@ Feature.prototype = {
     }
 };
 
-},{}],185:[function(require,module,exports){
+},{}],176:[function(require,module,exports){
 module.exports={
-  "_args": [
-    [
-      {
-        "raw": "mapbox-gl@^0.22.0",
-        "scope": null,
-        "escapedName": "mapbox-gl",
-        "name": "mapbox-gl",
-        "rawSpec": "^0.22.0",
-        "spec": ">=0.22.0 <0.23.0",
-        "type": "range"
-      },
-      "/home/etienne/Documents/plotly/plotly.js"
-    ]
-  ],
-  "_from": "mapbox-gl@>=0.22.0 <0.23.0",
+  "_from": "mapbox-gl@^0.22.0",
   "_id": "mapbox-gl@0.22.1",
-  "_inCache": true,
+  "_inBundle": false,
+  "_integrity": "sha1-kqllVH1MLyTCLLxIfu2khpTLYno=",
   "_location": "/mapbox-gl",
-  "_nodeVersion": "4.4.5",
-  "_npmOperationalInternal": {
-    "host": "packages-12-west.internal.npmjs.com",
-    "tmp": "tmp/mapbox-gl-0.22.1.tgz_1471549891670_0.8762630566488951"
-  },
-  "_npmUser": {
-    "name": "lucaswoj",
-    "email": "lucas@lucaswoj.com"
-  },
-  "_npmVersion": "2.15.5",
   "_phantomChildren": {},
   "_requested": {
+    "type": "range",
+    "registry": true,
     "raw": "mapbox-gl@^0.22.0",
-    "scope": null,
-    "escapedName": "mapbox-gl",
     "name": "mapbox-gl",
+    "escapedName": "mapbox-gl",
     "rawSpec": "^0.22.0",
-    "spec": ">=0.22.0 <0.23.0",
-    "type": "range"
+    "saveSpec": null,
+    "fetchSpec": "^0.22.0"
   },
   "_requiredBy": [
     "/"
   ],
   "_resolved": "https://registry.npmjs.org/mapbox-gl/-/mapbox-gl-0.22.1.tgz",
   "_shasum": "92a965547d4c2f24c22cbc487eeda48694cb627a",
-  "_shrinkwrap": null,
   "_spec": "mapbox-gl@^0.22.0",
-  "_where": "/home/etienne/Documents/plotly/plotly.js",
+  "_where": "/Users/flo/Dev/plotly.js",
   "browser": {
     "./js/util/ajax.js": "./js/util/browser/ajax.js",
     "./js/util/browser.js": "./js/util/browser/browser.js",
@@ -40431,6 +40805,7 @@ module.exports={
   "bugs": {
     "url": "https://github.com/mapbox/mapbox-gl-js/issues"
   },
+  "bundleDependencies": false,
   "dependencies": {
     "csscolorparser": "^1.0.2",
     "earcut": "^2.0.3",
@@ -40458,6 +40833,7 @@ module.exports={
     "webworkify": "^1.3.0",
     "whoots-js": "^2.0.0"
   },
+  "deprecated": false,
   "description": "A WebGL interactive maps library",
   "devDependencies": {
     "babel-preset-react": "^6.11.1",
@@ -40499,195 +40875,13 @@ module.exports={
     "webpack": "^1.13.1",
     "webworkify-webpack": "^1.1.3"
   },
-  "directories": {},
-  "dist": {
-    "shasum": "92a965547d4c2f24c22cbc487eeda48694cb627a",
-    "tarball": "https://registry.npmjs.org/mapbox-gl/-/mapbox-gl-0.22.1.tgz"
-  },
   "engines": {
     "node": ">=4.0.0"
   },
-  "gitHead": "13a9015341f0602ccb55c98c53079838ad4b70b5",
   "homepage": "https://github.com/mapbox/mapbox-gl-js#readme",
   "license": "BSD-3-Clause",
   "main": "js/mapbox-gl.js",
-  "maintainers": [
-    {
-      "name": "aaronlidman",
-      "email": "aaronlidman@gmail.com"
-    },
-    {
-      "name": "ajashton",
-      "email": "aj.ashton@gmail.com"
-    },
-    {
-      "name": "ansis",
-      "email": "ansis.brammanis@gmail.com"
-    },
-    {
-      "name": "bergwerkgis",
-      "email": "wb@bergwerk-gis.at"
-    },
-    {
-      "name": "bhousel",
-      "email": "bryan@mapbox.com"
-    },
-    {
-      "name": "bsudekum",
-      "email": "bobby@mapbox.com"
-    },
-    {
-      "name": "camilleanne",
-      "email": "camille@mapbox.com"
-    },
-    {
-      "name": "dnomadb",
-      "email": "damon@mapbox.com"
-    },
-    {
-      "name": "dthompson",
-      "email": "dthompson@gmail.com"
-    },
-    {
-      "name": "emilymcafee",
-      "email": "emily@mapbox.com"
-    },
-    {
-      "name": "flippmoke",
-      "email": "flippmoke@gmail.com"
-    },
-    {
-      "name": "freenerd",
-      "email": "spam@freenerd.de"
-    },
-    {
-      "name": "gretacb",
-      "email": "carol@mapbox.com"
-    },
-    {
-      "name": "ian29",
-      "email": "ian.villeda@gmail.com"
-    },
-    {
-      "name": "ianshward",
-      "email": "ian@mapbox.com"
-    },
-    {
-      "name": "ingalls",
-      "email": "nicholas.ingalls@gmail.com"
-    },
-    {
-      "name": "jfirebaugh",
-      "email": "john.firebaugh@gmail.com"
-    },
-    {
-      "name": "jrpruit1",
-      "email": "jake@jakepruitt.com"
-    },
-    {
-      "name": "karenzshea",
-      "email": "karen@mapbox.com"
-    },
-    {
-      "name": "kkaefer",
-      "email": "kkaefer@gmail.com"
-    },
-    {
-      "name": "lbud",
-      "email": "lauren@mapbox.com"
-    },
-    {
-      "name": "lucaswoj",
-      "email": "lucas@lucaswoj.com"
-    },
-    {
-      "name": "lxbarth",
-      "email": "alex@mapbox.com"
-    },
-    {
-      "name": "lyzidiamond",
-      "email": "lyzi@mapbox.com"
-    },
-    {
-      "name": "mapbox-admin",
-      "email": "accounts@mapbox.com"
-    },
-    {
-      "name": "mateov",
-      "email": "matt@mapbox.com"
-    },
-    {
-      "name": "mcwhittemore",
-      "email": "mcwhittemore@gmail.com"
-    },
-    {
-      "name": "miccolis",
-      "email": "jeff@miccolis.net"
-    },
-    {
-      "name": "mikemorris",
-      "email": "michael.patrick.morris@gmail.com"
-    },
-    {
-      "name": "morganherlocker",
-      "email": "morgan.herlocker@gmail.com"
-    },
-    {
-      "name": "mourner",
-      "email": "agafonkin@gmail.com"
-    },
-    {
-      "name": "nickidlugash",
-      "email": "nicki@mapbox.com"
-    },
-    {
-      "name": "rclark",
-      "email": "ryan.clark.j@gmail.com"
-    },
-    {
-      "name": "samanbb",
-      "email": "saman@mapbox.com"
-    },
-    {
-      "name": "sbma44",
-      "email": "tlee@mapbox.com"
-    },
-    {
-      "name": "scothis",
-      "email": "scothis@gmail.com"
-    },
-    {
-      "name": "sgillies",
-      "email": "sean@mapbox.com"
-    },
-    {
-      "name": "springmeyer",
-      "email": "dane@mapbox.com"
-    },
-    {
-      "name": "themarex",
-      "email": "patrick@mapbox.com"
-    },
-    {
-      "name": "tmcw",
-      "email": "tom@macwright.org"
-    },
-    {
-      "name": "tristen",
-      "email": "tristen.brown@gmail.com"
-    },
-    {
-      "name": "willwhite",
-      "email": "will@mapbox.com"
-    },
-    {
-      "name": "yhahn",
-      "email": "young@mapbox.com"
-    }
-  ],
   "name": "mapbox-gl",
-  "optionalDependencies": {},
-  "readme": "ERROR: No README data found!",
   "repository": {
     "type": "git",
     "url": "git://github.com/mapbox/mapbox-gl-js.git"
@@ -40713,7 +40907,7 @@ module.exports={
   "version": "0.22.1"
 }
 
-},{}],186:[function(require,module,exports){
+},{}],177:[function(require,module,exports){
 var rootPosition = { left: 0, top: 0 }
 
 module.exports = mouseEventOffset
@@ -40740,7 +40934,7 @@ function getBoundingClientOffset (element) {
   }
 }
 
-},{}],187:[function(require,module,exports){
+},{}],178:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -40968,7 +41162,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":191}],188:[function(require,module,exports){
+},{"_process":182}],179:[function(require,module,exports){
 'use strict';
 
 // lightweight Buffer shim for pbf browser build
@@ -41129,7 +41323,7 @@ function encodeString(str) {
     return bytes;
 }
 
-},{"ieee754":37}],189:[function(require,module,exports){
+},{"ieee754":28}],180:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -41555,7 +41749,7 @@ function writePackedFixed64(arr, pbf)  { for (var i = 0; i < arr.length; i++) pb
 function writePackedSFixed64(arr, pbf) { for (var i = 0; i < arr.length; i++) pbf.writeSFixed64(arr[i]); }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./buffer":188}],190:[function(require,module,exports){
+},{"./buffer":179}],181:[function(require,module,exports){
 'use strict';
 
 module.exports = Point;
@@ -41688,7 +41882,7 @@ Point.convert = function (a) {
     return a;
 };
 
-},{}],191:[function(require,module,exports){
+},{}],182:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -41874,7 +42068,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],192:[function(require,module,exports){
+},{}],183:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -42411,7 +42605,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],193:[function(require,module,exports){
+},{}],184:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -42497,7 +42691,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],194:[function(require,module,exports){
+},{}],185:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -42584,13 +42778,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],195:[function(require,module,exports){
+},{}],186:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":193,"./encode":194}],196:[function(require,module,exports){
+},{"./decode":184,"./encode":185}],187:[function(require,module,exports){
 'use strict';
 
 module.exports = partialSort;
@@ -42652,7 +42846,7 @@ function defaultCompare(a, b) {
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
-},{}],197:[function(require,module,exports){
+},{}],188:[function(require,module,exports){
 // Copyright 2014 Simon Lydell
 // X11 (“MIT”) Licensed. (See LICENSE.)
 
@@ -42701,7 +42895,7 @@ void (function(root, factory) {
 
 }));
 
-},{}],198:[function(require,module,exports){
+},{}],189:[function(require,module,exports){
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
     typeof define === 'function' && define.amd ? define(factory) :
@@ -42956,7 +43150,7 @@ Shelf.prototype.resize = function(w) {
 return ShelfPack;
 
 }));
-},{}],199:[function(require,module,exports){
+},{}],190:[function(require,module,exports){
 'use strict';
 
 var kdbush = require('kdbush');
@@ -43290,7 +43484,7 @@ function getY(p) {
     return p.y;
 }
 
-},{"kdbush":39}],200:[function(require,module,exports){
+},{"kdbush":30}],191:[function(require,module,exports){
 // TinyColor v1.4.1
 // https://github.com/bgrins/TinyColor
 // Brian Grinstead, MIT License
@@ -44487,7 +44681,7 @@ else {
 
 })(Math);
 
-},{}],201:[function(require,module,exports){
+},{}],192:[function(require,module,exports){
 /*
  * Copyright (C) 2008 Apple Inc. All Rights Reserved.
  *
@@ -44594,7 +44788,7 @@ UnitBezier.prototype.solve = function(x, epsilon) {
     return this.sampleCurveY(this.solveCurveX(x, epsilon));
 };
 
-},{}],202:[function(require,module,exports){
+},{}],193:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -45328,7 +45522,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":203,"punycode":192,"querystring":195}],203:[function(require,module,exports){
+},{"./util":194,"punycode":183,"querystring":186}],194:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -45346,7 +45540,7 @@ module.exports = {
   }
 };
 
-},{}],204:[function(require,module,exports){
+},{}],195:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -45371,14 +45565,14 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],205:[function(require,module,exports){
+},{}],196:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],206:[function(require,module,exports){
+},{}],197:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -45968,12 +46162,12 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":205,"_process":191,"inherits":204}],207:[function(require,module,exports){
+},{"./support/isBuffer":196,"_process":182,"inherits":195}],198:[function(require,module,exports){
 module.exports.VectorTile = require('./lib/vectortile.js');
 module.exports.VectorTileFeature = require('./lib/vectortilefeature.js');
 module.exports.VectorTileLayer = require('./lib/vectortilelayer.js');
 
-},{"./lib/vectortile.js":208,"./lib/vectortilefeature.js":209,"./lib/vectortilelayer.js":210}],208:[function(require,module,exports){
+},{"./lib/vectortile.js":199,"./lib/vectortilefeature.js":200,"./lib/vectortilelayer.js":201}],199:[function(require,module,exports){
 'use strict';
 
 var VectorTileLayer = require('./vectortilelayer');
@@ -45992,7 +46186,7 @@ function readTile(tag, layers, pbf) {
 }
 
 
-},{"./vectortilelayer":210}],209:[function(require,module,exports){
+},{"./vectortilelayer":201}],200:[function(require,module,exports){
 'use strict';
 
 var Point = require('point-geometry');
@@ -46227,7 +46421,7 @@ function signedArea(ring) {
     return sum;
 }
 
-},{"point-geometry":190}],210:[function(require,module,exports){
+},{"point-geometry":181}],201:[function(require,module,exports){
 'use strict';
 
 var VectorTileFeature = require('./vectortilefeature.js');
@@ -46290,7 +46484,7 @@ VectorTileLayer.prototype.feature = function(i) {
     return new VectorTileFeature(this._pbf, end, this.extent, this._keys, this._values);
 };
 
-},{"./vectortilefeature.js":209}],211:[function(require,module,exports){
+},{"./vectortilefeature.js":200}],202:[function(require,module,exports){
 var Pbf = require('pbf')
 var vtpb = require('./vector-tile-pb')
 var GeoJSONWrapper = require('./lib/geojson_wrapper')
@@ -46446,7 +46640,7 @@ function wrapValue (value) {
   return result
 }
 
-},{"./lib/geojson_wrapper":212,"./vector-tile-pb":213,"pbf":189}],212:[function(require,module,exports){
+},{"./lib/geojson_wrapper":203,"./vector-tile-pb":204,"pbf":180}],203:[function(require,module,exports){
 'use strict'
 
 var Point = require('point-geometry')
@@ -46514,7 +46708,7 @@ FeatureWrapper.prototype.bbox = function () {
 
 FeatureWrapper.prototype.toGeoJSON = VectorTileFeature.prototype.toGeoJSON
 
-},{"point-geometry":190,"vector-tile":207}],213:[function(require,module,exports){
+},{"point-geometry":181,"vector-tile":198}],204:[function(require,module,exports){
 'use strict';
 
 // tile ========================================
@@ -46620,7 +46814,7 @@ function writeLayer(layer, pbf) {
     if (layer.extent !== undefined) pbf.writeVarintField(5, layer.extent);
 }
 
-},{}],214:[function(require,module,exports){
+},{}],205:[function(require,module,exports){
 var bundleFn = arguments[3];
 var sources = arguments[4];
 var cache = arguments[5];
@@ -46703,12 +46897,12 @@ module.exports = function (fn, options) {
     return worker;
 };
 
-},{}],215:[function(require,module,exports){
+},{}],206:[function(require,module,exports){
 module.exports.RADIUS = 6378137;
 module.exports.FLATTENING = 1/298.257223563;
 module.exports.POLAR_RADIUS = 6356752.3142;
 
-},{}],216:[function(require,module,exports){
+},{}],207:[function(require,module,exports){
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
     typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -46798,7 +46992,7 @@ exports.getMercCoords = getMercCoords;
 Object.defineProperty(exports, '__esModule', { value: true });
 
 }));
-},{}],217:[function(require,module,exports){
+},{}],208:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -46895,7 +47089,7 @@ module.exports = function handleAnnotationDefaults(annIn, annOut, fullLayout, op
     return annOut;
 };
 
-},{"../../lib":350,"../../plots/cartesian/axes":390,"./attributes":219,"./common_defaults":222}],218:[function(require,module,exports){
+},{"../../lib":342,"../../plots/cartesian/axes":382,"./attributes":210,"./common_defaults":213}],209:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -46966,7 +47160,7 @@ module.exports = [
     }
 ];
 
-},{}],219:[function(require,module,exports){
+},{}],210:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -47288,7 +47482,7 @@ module.exports = {
     }
 };
 
-},{"../../plots/cartesian/constants":395,"../../plots/font_attributes":414,"./arrow_paths":218}],220:[function(require,module,exports){
+},{"../../plots/cartesian/constants":387,"../../plots/font_attributes":406,"./arrow_paths":209}],211:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -47391,7 +47585,7 @@ function annAutorange(gd) {
     });
 }
 
-},{"../../lib":350,"../../plots/cartesian/axes":390,"./draw":225}],221:[function(require,module,exports){
+},{"../../lib":342,"../../plots/cartesian/axes":382,"./draw":216}],212:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -47525,7 +47719,7 @@ function clickData2r(d, ax) {
     return ax.type === 'log' ? ax.l2r(d) : ax.d2r(d);
 }
 
-},{"../../plotly":385}],222:[function(require,module,exports){
+},{"../../plotly":377}],213:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -47593,7 +47787,7 @@ module.exports = function handleAnnotationCommonDefaults(annIn, annOut, fullLayo
     coerce('captureevents', !!hoverText);
 };
 
-},{"../../lib":350,"../color":234}],223:[function(require,module,exports){
+},{"../../lib":342,"../color":225}],214:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -47656,7 +47850,7 @@ module.exports = function convertCoords(gd, ax, newType, doExtra) {
     }
 };
 
-},{"../../lib/to_log_range":372,"fast-isnumeric":12}],224:[function(require,module,exports){
+},{"../../lib/to_log_range":364,"fast-isnumeric":12}],215:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -47681,7 +47875,7 @@ module.exports = function supplyLayoutDefaults(layoutIn, layoutOut) {
     handleArrayContainerDefaults(layoutIn, layoutOut, opts);
 };
 
-},{"../../plots/array_container_defaults":387,"./annotation_defaults":217}],225:[function(require,module,exports){
+},{"../../plots/array_container_defaults":379,"./annotation_defaults":208}],216:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48391,7 +48585,7 @@ function drawRaw(gd, options, index, subplotId, xa, ya) {
     else annText.call(textLayout);
 }
 
-},{"../../lib":350,"../../lib/setcursor":368,"../../lib/svg_text_utils":370,"../../plotly":385,"../../plots/cartesian/axes":390,"../../plots/plots":426,"../color":234,"../dragelement":255,"../drawing":258,"../fx":275,"./draw_arrow_head":226,"d3":8}],226:[function(require,module,exports){
+},{"../../lib":342,"../../lib/setcursor":360,"../../lib/svg_text_utils":362,"../../plotly":377,"../../plots/cartesian/axes":382,"../../plots/plots":418,"../color":225,"../dragelement":247,"../drawing":250,"../fx":267,"./draw_arrow_head":217,"d3":8}],217:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48530,7 +48724,7 @@ module.exports = function drawArrowHead(el3, ends, options) {
     if(doEnd) drawhead(end, endRot);
 };
 
-},{"../color":234,"./arrow_paths":218,"d3":8}],227:[function(require,module,exports){
+},{"../color":225,"./arrow_paths":209,"d3":8}],218:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48563,7 +48757,7 @@ module.exports = {
     convertCoords: require('./convert_coords')
 };
 
-},{"./attributes":219,"./calc_autorange":220,"./click":221,"./convert_coords":223,"./defaults":224,"./draw":225}],228:[function(require,module,exports){
+},{"./attributes":210,"./calc_autorange":211,"./click":212,"./convert_coords":214,"./defaults":215,"./draw":216}],219:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48648,7 +48842,7 @@ module.exports = overrideAll({
     // zref: 'z'
 }, 'calc', 'from-root');
 
-},{"../../plot_api/edit_types":374,"../annotations/attributes":219}],229:[function(require,module,exports){
+},{"../../plot_api/edit_types":366,"../annotations/attributes":210}],220:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48713,7 +48907,7 @@ function mockAnnAxes(ann, scene) {
     };
 }
 
-},{"../../lib":350,"../../plots/cartesian/axes":390}],230:[function(require,module,exports){
+},{"../../lib":342,"../../plots/cartesian/axes":382}],221:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48791,7 +48985,7 @@ function handleAnnotationDefaults(annIn, annOut, sceneLayout, opts, itemOpts) {
     return annOut;
 }
 
-},{"../../lib":350,"../../plots/array_container_defaults":387,"../../plots/cartesian/axes":390,"../annotations/common_defaults":222,"./attributes":228}],231:[function(require,module,exports){
+},{"../../lib":342,"../../plots/array_container_defaults":379,"../../plots/cartesian/axes":382,"../annotations/common_defaults":213,"./attributes":219}],222:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48843,7 +49037,7 @@ module.exports = function draw(scene) {
     }
 };
 
-},{"../../plots/gl3d/project":416,"../annotations/draw":225}],232:[function(require,module,exports){
+},{"../../plots/gl3d/project":408,"../annotations/draw":216}],223:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48871,7 +49065,7 @@ module.exports = {
     draw: require('./draw')
 };
 
-},{"./attributes":228,"./convert":229,"./defaults":230,"./draw":231}],233:[function(require,module,exports){
+},{"./attributes":219,"./convert":220,"./defaults":221,"./draw":222}],224:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -48911,7 +49105,7 @@ exports.borderLine = '#BEC8D9';
 // gives back exactly lightLine if the other colors are defaults.
 exports.lightFraction = 100 * (0xe - 0x4) / (0xf - 0x4);
 
-},{}],234:[function(require,module,exports){
+},{}],225:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -49082,7 +49276,7 @@ function cleanOne(val) {
     return 'rgb(' + rgbStr + ')';
 }
 
-},{"./attributes":233,"fast-isnumeric":12,"tinycolor2":200}],235:[function(require,module,exports){
+},{"./attributes":224,"fast-isnumeric":12,"tinycolor2":191}],226:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -49216,6 +49410,7 @@ module.exports = overrideAll({
     }),
     tickangle: axesAttrs.tickangle,
     tickformat: axesAttrs.tickformat,
+    tickformatstops: axesAttrs.tickformatstops,
     tickprefix: axesAttrs.tickprefix,
     showtickprefix: axesAttrs.showtickprefix,
     ticksuffix: axesAttrs.ticksuffix,
@@ -49241,7 +49436,35 @@ module.exports = overrideAll({
     }
 }, 'colorbars', 'from-root');
 
-},{"../../lib/extend":343,"../../plot_api/edit_types":374,"../../plots/cartesian/layout_attributes":401,"../../plots/font_attributes":414}],236:[function(require,module,exports){
+},{"../../lib/extend":335,"../../plot_api/edit_types":366,"../../plots/cartesian/layout_attributes":393,"../../plots/font_attributes":406}],227:[function(require,module,exports){
+/**
+* Copyright 2012-2017, Plotly, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the MIT license found in the
+* LICENSE file in the root directory of this source tree.
+*/
+
+'use strict';
+
+module.exports = {
+    cn: {
+        colorbar: 'colorbar',
+        cbbg: 'cbbg',
+        cbfill: 'cbfill',
+        cbfills: 'cbfills',
+        cbline: 'cbline',
+        cblines: 'cblines',
+        cbaxis: 'cbaxis',
+        cbtitleunshift: 'cbtitleunshift',
+        cbtitle: 'cbtitle',
+        cboutline: 'cboutline',
+        crisp: 'crisp',
+        jsPlaceholder: 'js-placeholder'
+    }
+};
+
+},{}],228:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -49308,7 +49531,7 @@ module.exports = function colorbarDefaults(containerIn, containerOut, layout) {
     coerce('titleside');
 };
 
-},{"../../lib":350,"../../plots/cartesian/tick_label_defaults":408,"../../plots/cartesian/tick_mark_defaults":409,"../../plots/cartesian/tick_value_defaults":410,"./attributes":235}],237:[function(require,module,exports){
+},{"../../lib":342,"../../plots/cartesian/tick_label_defaults":400,"../../plots/cartesian/tick_mark_defaults":401,"../../plots/cartesian/tick_value_defaults":402,"./attributes":226}],229:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -49342,7 +49565,7 @@ var handleAxisPositionDefaults = require('../../plots/cartesian/position_default
 var axisLayoutAttrs = require('../../plots/cartesian/layout_attributes');
 
 var attributes = require('./attributes');
-
+var cn = require('./constants').cn;
 
 module.exports = function draw(gd, id) {
     // opts: options object, containing everything from attributes
@@ -49559,15 +49782,16 @@ module.exports = function draw(gd, id) {
         // now draw the elements
         var container = fullLayout._infolayer.selectAll('g.' + id).data([0]);
         container.enter().append('g').classed(id, true)
+            .classed(cn.colorbar, true)
             .each(function() {
                 var s = d3.select(this);
-                s.append('rect').classed('cbbg', true);
-                s.append('g').classed('cbfills', true);
-                s.append('g').classed('cblines', true);
-                s.append('g').classed('cbaxis', true).classed('crisp', true);
-                s.append('g').classed('cbtitleunshift', true)
-                    .append('g').classed('cbtitle', true);
-                s.append('rect').classed('cboutline', true);
+                s.append('rect').classed(cn.cbbg, true);
+                s.append('g').classed(cn.cbfills, true);
+                s.append('g').classed(cn.cblines, true);
+                s.append('g').classed(cn.cbaxis, true).classed(cn.crisp, true);
+                s.append('g').classed(cn.cbtitleunshift, true)
+                    .append('g').classed(cn.cbtitle, true);
+                s.append('rect').classed(cn.cboutline, true);
                 s.select('.cbtitle').datum(0);
             });
         container.attr('transform', 'translate(' + Math.round(gs.l) +
@@ -49626,7 +49850,7 @@ module.exports = function draw(gd, id) {
                     }
                 }
                 else if(titleText.node() &&
-                        !titleText.classed('js-placeholder')) {
+                        !titleText.classed(cn.jsPlaceholder)) {
                     titleHeight = Drawing.bBox(titleText.node()).height;
                 }
                 if(titleHeight) {
@@ -49659,7 +49883,7 @@ module.exports = function draw(gd, id) {
                 .selectAll('rect.cbfill')
                     .data(filllevels);
             fills.enter().append('rect')
-                .classed('cbfill', true)
+                .classed(cn.cbfill, true)
                 .style('stroke', 'none');
             fills.exit().remove();
             fills.each(function(d, i) {
@@ -49700,7 +49924,7 @@ module.exports = function draw(gd, id) {
                     .data(opts.line.color && opts.line.width ?
                         linelevels : []);
             lines.enter().append('path')
-                .classed('cbline', true);
+                .classed(cn.cbline, true);
             lines.exit().remove();
             lines.each(function(d) {
                 d3.select(this)
@@ -49790,7 +50014,7 @@ module.exports = function draw(gd, id) {
             var innerWidth = thickPx + opts.outlinewidth / 2 +
                     Drawing.bBox(cbAxisOut._axislayer.node()).width;
             titleEl = titleCont.select('text');
-            if(titleEl.node() && !titleEl.classed('js-placeholder')) {
+            if(titleEl.node() && !titleEl.classed(cn.jsPlaceholder)) {
                 var mathJaxNode = titleCont
                         .select('.h' + cbAxisOut._id + 'title-math-group')
                         .node(),
@@ -49948,7 +50172,7 @@ module.exports = function draw(gd, id) {
     return component;
 };
 
-},{"../../constants/alignment":331,"../../lib":350,"../../lib/extend":343,"../../lib/setcursor":368,"../../lib/svg_text_utils":370,"../../plotly":385,"../../plots/cartesian/axes":390,"../../plots/cartesian/axis_defaults":392,"../../plots/cartesian/layout_attributes":401,"../../plots/cartesian/position_defaults":404,"../../plots/plots":426,"../../registry":434,"../color":234,"../dragelement":255,"../drawing":258,"../titles":324,"./attributes":235,"d3":8,"tinycolor2":200}],238:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../lib":342,"../../lib/extend":335,"../../lib/setcursor":360,"../../lib/svg_text_utils":362,"../../plotly":377,"../../plots/cartesian/axes":382,"../../plots/cartesian/axis_defaults":384,"../../plots/cartesian/layout_attributes":393,"../../plots/cartesian/position_defaults":396,"../../plots/plots":418,"../../registry":426,"../color":225,"../dragelement":247,"../drawing":250,"../titles":316,"./attributes":226,"./constants":227,"d3":8,"tinycolor2":191}],230:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -49967,7 +50191,7 @@ module.exports = function hasColorbar(container) {
     return Lib.isPlainObject(container.colorbar);
 };
 
-},{"../../lib":350}],239:[function(require,module,exports){
+},{"../../lib":342}],231:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50034,7 +50258,7 @@ module.exports = {
     }
 };
 
-},{}],240:[function(require,module,exports){
+},{}],232:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50113,7 +50337,7 @@ module.exports = function calc(trace, vals, containerStr, cLetter) {
     }
 };
 
-},{"../../lib":350,"./flip_scale":245,"./scales":252}],241:[function(require,module,exports){
+},{"../../lib":342,"./flip_scale":237,"./scales":244}],233:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50180,7 +50404,7 @@ module.exports = function makeColorScaleAttributes(context, editTypeOverride, au
     };
 };
 
-},{"../../lib/extend":343,"./attributes":239,"./scales.js":252}],242:[function(require,module,exports){
+},{"../../lib/extend":335,"./attributes":231,"./scales.js":244}],234:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50196,7 +50420,7 @@ var scales = require('./scales');
 
 module.exports = scales.RdBu;
 
-},{"./scales":252}],243:[function(require,module,exports){
+},{"./scales":244}],235:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50260,7 +50484,7 @@ module.exports = function colorScaleDefaults(traceIn, traceOut, layout, coerce, 
     if(showScale) colorbarDefaults(containerIn, containerOut, layout);
 };
 
-},{"../../lib":350,"../colorbar/defaults":236,"../colorbar/has_colorbar":238,"./flip_scale":245,"./is_valid_scale":249,"fast-isnumeric":12}],244:[function(require,module,exports){
+},{"../../lib":342,"../colorbar/defaults":228,"../colorbar/has_colorbar":230,"./flip_scale":237,"./is_valid_scale":241,"fast-isnumeric":12}],236:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50297,7 +50521,7 @@ module.exports = function extractScale(scl, cmin, cmax) {
     };
 };
 
-},{}],245:[function(require,module,exports){
+},{}],237:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50322,7 +50546,7 @@ module.exports = function flipScale(scl) {
     return sclNew;
 };
 
-},{}],246:[function(require,module,exports){
+},{}],238:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50362,7 +50586,7 @@ module.exports = function getScale(scl, dflt) {
     return scl;
 };
 
-},{"./default_scale":242,"./is_valid_scale_array":250,"./scales":252}],247:[function(require,module,exports){
+},{"./default_scale":234,"./is_valid_scale_array":242,"./scales":244}],239:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50408,7 +50632,7 @@ module.exports = function hasColorscale(trace, containerStr) {
     );
 };
 
-},{"../../lib":350,"./is_valid_scale":249,"fast-isnumeric":12}],248:[function(require,module,exports){
+},{"../../lib":342,"./is_valid_scale":241,"fast-isnumeric":12}],240:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50442,7 +50666,7 @@ exports.extractScale = require('./extract_scale');
 
 exports.makeColorScaleFunc = require('./make_color_scale_func');
 
-},{"./attributes":239,"./calc":240,"./default_scale":242,"./defaults":243,"./extract_scale":244,"./flip_scale":245,"./get_scale":246,"./has_colorscale":247,"./is_valid_scale":249,"./make_color_scale_func":251,"./scales":252}],249:[function(require,module,exports){
+},{"./attributes":231,"./calc":232,"./default_scale":234,"./defaults":235,"./extract_scale":236,"./flip_scale":237,"./get_scale":238,"./has_colorscale":239,"./is_valid_scale":241,"./make_color_scale_func":243,"./scales":244}],241:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50463,7 +50687,7 @@ module.exports = function isValidScale(scl) {
     else return isValidScaleArray(scl);
 };
 
-},{"./is_valid_scale_array":250,"./scales":252}],250:[function(require,module,exports){
+},{"./is_valid_scale_array":242,"./scales":244}],242:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50500,7 +50724,7 @@ module.exports = function isValidScaleArray(scl) {
     return true;
 };
 
-},{"tinycolor2":200}],251:[function(require,module,exports){
+},{"tinycolor2":191}],243:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50596,7 +50820,7 @@ function colorArray2rbga(colorArray) {
     return tinycolor(colorObj).toRgbString();
 }
 
-},{"../color":234,"d3":8,"fast-isnumeric":12,"tinycolor2":200}],252:[function(require,module,exports){
+},{"../color":225,"d3":8,"fast-isnumeric":12,"tinycolor2":191}],244:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50727,7 +50951,7 @@ module.exports = {
     ]
 };
 
-},{}],253:[function(require,module,exports){
+},{}],245:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50760,7 +50984,7 @@ module.exports = function align(v, dv, v0, v1, anchor) {
     return vc;
 };
 
-},{}],254:[function(require,module,exports){
+},{}],246:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -50798,7 +51022,7 @@ module.exports = function getCursor(x, y, xanchor, yanchor) {
     return cursorset[y][x];
 };
 
-},{"../../lib":350}],255:[function(require,module,exports){
+},{"../../lib":342}],247:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -51031,7 +51255,7 @@ function pointerOffset(e) {
     );
 }
 
-},{"../../constants/interactions":332,"../../lib":350,"../../plotly":385,"../../plots/cartesian/constants":395,"./align":253,"./cursor":254,"./unhover":256,"has-hover":36,"mouse-event-offset":186}],256:[function(require,module,exports){
+},{"../../constants/interactions":324,"../../lib":342,"../../plotly":377,"../../plots/cartesian/constants":387,"./align":245,"./cursor":246,"./unhover":248,"has-hover":27,"mouse-event-offset":177}],248:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -51087,7 +51311,7 @@ unhover.raw = function unhoverRaw(gd, evt) {
     }
 };
 
-},{"../../lib/events":342,"../../lib/get_graph_div":348,"../../lib/throttle":371,"../fx/constants":270}],257:[function(require,module,exports){
+},{"../../lib/events":334,"../../lib/get_graph_div":340,"../../lib/throttle":363,"../fx/constants":262}],249:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -51112,7 +51336,7 @@ exports.dash = {
     
 };
 
-},{}],258:[function(require,module,exports){
+},{}],250:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52028,7 +52252,7 @@ drawing.setTextPointsScale = function(selection, xScale, yScale) {
     });
 };
 
-},{"../../constants/alignment":331,"../../constants/xmlns_namespaces":335,"../../lib":350,"../../lib/svg_text_utils":370,"../../registry":434,"../../traces/scatter/make_bubble_size_func":461,"../../traces/scatter/subtypes":466,"../color":234,"../colorscale":248,"./symbol_defs":259,"d3":8,"fast-isnumeric":12,"tinycolor2":200}],259:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../constants/xmlns_namespaces":327,"../../lib":342,"../../lib/svg_text_utils":362,"../../registry":426,"../../traces/scatter/make_bubble_size_func":454,"../../traces/scatter/subtypes":459,"../color":225,"../colorscale":240,"./symbol_defs":251,"d3":8,"fast-isnumeric":12,"tinycolor2":191}],251:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52504,7 +52728,7 @@ module.exports = {
     }
 };
 
-},{"d3":8}],260:[function(require,module,exports){
+},{"d3":8}],252:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52619,7 +52843,7 @@ module.exports = {
     }
 };
 
-},{}],261:[function(require,module,exports){
+},{}],253:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52682,7 +52906,7 @@ function calcOneAxis(calcTrace, trace, axis, coord) {
     Axes.expand(axis, vals, {padded: true});
 }
 
-},{"../../plots/cartesian/axes":390,"../../registry":434,"./compute_error":262,"fast-isnumeric":12}],262:[function(require,module,exports){
+},{"../../plots/cartesian/axes":382,"../../registry":426,"./compute_error":254,"fast-isnumeric":12}],254:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52778,7 +53002,7 @@ function makeComputeErrorValue(type, value) {
     }
 }
 
-},{}],263:[function(require,module,exports){
+},{}],255:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52855,7 +53079,7 @@ module.exports = function(traceIn, traceOut, defaultColor, opts) {
     }
 };
 
-},{"../../lib":350,"../../registry":434,"./attributes":260,"fast-isnumeric":12}],264:[function(require,module,exports){
+},{"../../lib":342,"../../registry":426,"./attributes":252,"fast-isnumeric":12}],256:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -52914,7 +53138,7 @@ errorBars.hoverInfo = function(calcPoint, trace, hoverPoint) {
     }
 };
 
-},{"./attributes":260,"./calc":261,"./defaults":263,"./plot":265,"./style":266}],265:[function(require,module,exports){
+},{"./attributes":252,"./calc":253,"./defaults":255,"./plot":257,"./style":258}],257:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53088,7 +53312,7 @@ function errorCoords(d, xa, ya) {
     return out;
 }
 
-},{"../../traces/scatter/subtypes":466,"../drawing":258,"d3":8,"fast-isnumeric":12}],266:[function(require,module,exports){
+},{"../../traces/scatter/subtypes":459,"../drawing":250,"d3":8,"fast-isnumeric":12}],258:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53125,7 +53349,7 @@ module.exports = function style(traces) {
     });
 };
 
-},{"../color":234,"d3":8}],267:[function(require,module,exports){
+},{"../color":225,"d3":8}],259:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53171,7 +53395,7 @@ module.exports = {
     }
 };
 
-},{"../../plots/font_attributes":414}],268:[function(require,module,exports){
+},{"../../plots/font_attributes":406}],260:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53227,7 +53451,7 @@ function paste(traceAttr, cd, cdAttr, fn) {
     }
 }
 
-},{"../../lib":350,"../../registry":434}],269:[function(require,module,exports){
+},{"../../lib":342,"../../registry":426}],261:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53265,7 +53489,7 @@ module.exports = function click(gd, evt, subplot) {
     }
 };
 
-},{"../../registry":434,"./hover":273}],270:[function(require,module,exports){
+},{"../../registry":426,"./hover":265}],262:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53300,7 +53524,7 @@ module.exports = {
     HOVERID: '-hover'
 };
 
-},{}],271:[function(require,module,exports){
+},{}],263:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53323,7 +53547,7 @@ module.exports = function supplyDefaults(traceIn, traceOut, defaultColor, layout
     handleHoverLabelDefaults(traceIn, traceOut, coerce, layout.hoverlabel);
 };
 
-},{"../../lib":350,"./attributes":267,"./hoverlabel_defaults":274}],272:[function(require,module,exports){
+},{"../../lib":342,"./attributes":259,"./hoverlabel_defaults":266}],264:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53360,7 +53584,7 @@ exports.p2c = function p2c(axArray, v) {
 };
 
 exports.getDistanceFunction = function getDistanceFunction(mode, dx, dy, dxy) {
-    if(mode === 'closest') return dxy || quadrature(dx, dy);
+    if(mode === 'closest') return dxy || exports.quadrature(dx, dy);
     return mode === 'x' ? dx : dy;
 };
 
@@ -53403,19 +53627,20 @@ exports.inbox = function inbox(v0, v1) {
     return Infinity;
 };
 
-function quadrature(dx, dy) {
+exports.quadrature = function quadrature(dx, dy) {
     return function(di) {
         var x = dx(di),
             y = dy(di);
         return Math.sqrt(x * x + y * y);
     };
-}
+};
 
 /** Appends values inside array attributes corresponding to given point number
  *
  * @param {object} pointData : point data object (gets mutated here)
  * @param {object} trace : full trace object
- * @param {number} pointNumber : point number
+ * @param {number|Array(number)} pointNumber : point number. May be a length-2 array
+ *     [row, col] to dig into 2D arrays
  */
 exports.appendArrayPointValue = function(pointData, trace, pointNumber) {
     var arrayAttrs = trace._arrayAttrs;
@@ -53426,27 +53651,73 @@ exports.appendArrayPointValue = function(pointData, trace, pointNumber) {
 
     for(var i = 0; i < arrayAttrs.length; i++) {
         var astr = arrayAttrs[i];
-        var key;
-
-        if(astr === 'ids') key = 'id';
-        else if(astr === 'locations') key = 'location';
-        else key = astr;
+        var key = getPointKey(astr);
 
         if(pointData[key] === undefined) {
             var val = Lib.nestedProperty(trace, astr).get();
+            var pointVal = getPointData(val, pointNumber);
 
-            if(Array.isArray(pointNumber)) {
-                if(Array.isArray(val) && Array.isArray(val[pointNumber[0]])) {
-                    pointData[key] = val[pointNumber[0]][pointNumber[1]];
-                }
-            } else {
-                pointData[key] = val[pointNumber];
-            }
+            if(pointVal !== undefined) pointData[key] = pointVal;
         }
     }
 };
 
-},{"../../lib":350,"./constants":270}],273:[function(require,module,exports){
+/**
+ * Appends values inside array attributes corresponding to given point number array
+ * For use when pointData references a plot entity that arose (or potentially arose)
+ * from multiple points in the input data
+ *
+ * @param {object} pointData : point data object (gets mutated here)
+ * @param {object} trace : full trace object
+ * @param {Array(number)|Array(Array(number))} pointNumbers : Array of point numbers.
+ *     Each entry in the array may itself be a length-2 array [row, col] to dig into 2D arrays
+ */
+exports.appendArrayMultiPointValues = function(pointData, trace, pointNumbers) {
+    var arrayAttrs = trace._arrayAttrs;
+
+    if(!arrayAttrs) {
+        return;
+    }
+
+    for(var i = 0; i < arrayAttrs.length; i++) {
+        var astr = arrayAttrs[i];
+        var key = getPointKey(astr);
+
+        if(pointData[key] === undefined) {
+            var val = Lib.nestedProperty(trace, astr).get();
+            var keyVal = new Array(pointNumbers.length);
+
+            for(var j = 0; j < pointNumbers.length; j++) {
+                keyVal[j] = getPointData(val, pointNumbers[j]);
+            }
+            pointData[key] = keyVal;
+        }
+    }
+};
+
+var pointKeyMap = {
+    ids: 'id',
+    locations: 'location',
+    labels: 'label',
+    values: 'value',
+    'marker.colors': 'color'
+};
+
+function getPointKey(astr) {
+    return pointKeyMap[astr] || astr;
+}
+
+function getPointData(val, pointNumber) {
+    if(Array.isArray(pointNumber)) {
+        if(Array.isArray(val) && Array.isArray(val[pointNumber[0]])) {
+            return val[pointNumber[0]][pointNumber[1]];
+        }
+    } else {
+        return val[pointNumber];
+    }
+}
+
+},{"../../lib":342,"./constants":262}],265:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -53604,14 +53875,6 @@ exports.loneHover = function loneHover(hoverItem, opts) {
 
 // The actual implementation is here:
 function _hover(gd, evt, subplot, noHoverEvent) {
-    if((subplot === 'pie' || subplot === 'sankey') && !noHoverEvent) {
-        gd.emit('plotly_hover', {
-            event: evt.originalEvent,
-            points: [evt]
-        });
-        return;
-    }
-
     if(!subplot) subplot = 'xy';
 
     // if the user passed in an array of subplots,
@@ -53838,7 +54101,7 @@ function _hover(gd, evt, subplot, noHoverEvent) {
 
         // Now find the points.
         if(trace._module && trace._module.hoverPoints) {
-            var newPoints = trace._module.hoverPoints(pointData, xval, yval, mode);
+            var newPoints = trace._module.hoverPoints(pointData, xval, yval, mode, fullLayout._hoverlayer);
             if(newPoints) {
                 var newPoint;
                 for(var newPointNum = 0; newPointNum < newPoints.length; newPointNum++) {
@@ -54512,39 +54775,20 @@ function cleanPoint(d, hovermode) {
     d.y0 = Lib.constrain(d.y0, 0, d.ya._length);
     d.y1 = Lib.constrain(d.y1, 0, d.ya._length);
 
-    // and convert the x and y label values into objects
-    // formatted as text, with font info
-    var logOffScale;
+    // and convert the x and y label values into formatted text
     if(d.xLabelVal !== undefined) {
-        logOffScale = (d.xa.type === 'log' && d.xLabelVal <= 0);
-        var xLabelObj = Axes.tickText(d.xa,
-                d.xa.c2l(logOffScale ? -d.xLabelVal : d.xLabelVal), 'hover');
-        if(logOffScale) {
-            if(d.xLabelVal === 0) d.xLabel = '0';
-            else d.xLabel = '-' + xLabelObj.text;
-        }
-        // TODO: should we do something special if the axis calendar and
-        // the data calendar are different? Somehow display both dates with
-        // their system names? Right now it will just display in the axis calendar
-        // but users could add the other one as text.
-        else d.xLabel = xLabelObj.text;
+        d.xLabel = ('xLabel' in d) ? d.xLabel : Axes.hoverLabelText(d.xa, d.xLabelVal);
         d.xVal = d.xa.c2d(d.xLabelVal);
     }
-
     if(d.yLabelVal !== undefined) {
-        logOffScale = (d.ya.type === 'log' && d.yLabelVal <= 0);
-        var yLabelObj = Axes.tickText(d.ya,
-                d.ya.c2l(logOffScale ? -d.yLabelVal : d.yLabelVal), 'hover');
-        if(logOffScale) {
-            if(d.yLabelVal === 0) d.yLabel = '0';
-            else d.yLabel = '-' + yLabelObj.text;
-        }
-        // TODO: see above TODO
-        else d.yLabel = yLabelObj.text;
+        d.yLabel = ('yLabel' in d) ? d.yLabel : Axes.hoverLabelText(d.ya, d.yLabelVal);
         d.yVal = d.ya.c2d(d.yLabelVal);
     }
 
-    if(d.zLabelVal !== undefined) d.zLabel = String(d.zLabelVal);
+    // Traces like heatmaps generate the zLabel in their hoverPoints function
+    if(d.zLabelVal !== undefined && d.zLabel === undefined) {
+        d.zLabel = String(d.zLabelVal);
+    }
 
     // for box means and error bars, add the range to the label
     if(!isNaN(d.xerr) && !(d.xa.type === 'log' && d.xerr <= 0)) {
@@ -54732,7 +54976,7 @@ function hoverChanged(gd, evt, oldhoverdata) {
     return false;
 }
 
-},{"../../lib":350,"../../lib/events":342,"../../lib/override_cursor":360,"../../lib/svg_text_utils":370,"../../plots/cartesian/axes":390,"../../registry":434,"../color":234,"../dragelement":255,"../drawing":258,"./constants":270,"./helpers":272,"d3":8,"fast-isnumeric":12,"tinycolor2":200}],274:[function(require,module,exports){
+},{"../../lib":342,"../../lib/events":334,"../../lib/override_cursor":352,"../../lib/svg_text_utils":362,"../../plots/cartesian/axes":382,"../../registry":426,"../color":225,"../dragelement":247,"../drawing":250,"./constants":262,"./helpers":264,"d3":8,"fast-isnumeric":12,"tinycolor2":191}],266:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -54754,7 +54998,7 @@ module.exports = function handleHoverLabelDefaults(contIn, contOut, coerce, opts
     Lib.coerceFont(coerce, 'hoverlabel.font', opts.font);
 };
 
-},{"../../lib":350}],275:[function(require,module,exports){
+},{"../../lib":342}],267:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -54792,6 +55036,7 @@ module.exports = {
     getDistanceFunction: helpers.getDistanceFunction,
     getClosest: helpers.getClosest,
     inbox: helpers.inbox,
+    quadrature: helpers.quadrature,
     appendArrayPointValue: helpers.appendArrayPointValue,
 
     castHoverOption: castHoverOption,
@@ -54831,7 +55076,7 @@ function castHoverinfo(trace, fullLayout, ptNumber) {
     return Lib.castOption(trace, ptNumber, 'hoverinfo', _coerce);
 }
 
-},{"../../lib":350,"../dragelement":255,"./attributes":267,"./calc":268,"./click":269,"./constants":270,"./defaults":271,"./helpers":272,"./hover":273,"./layout_attributes":276,"./layout_defaults":277,"./layout_global_defaults":278,"d3":8}],276:[function(require,module,exports){
+},{"../../lib":342,"../dragelement":247,"./attributes":259,"./calc":260,"./click":261,"./constants":262,"./defaults":263,"./helpers":264,"./hover":265,"./layout_attributes":268,"./layout_defaults":269,"./layout_global_defaults":270,"d3":8}],268:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -54894,7 +55139,7 @@ module.exports = {
     }
 };
 
-},{"../../plots/font_attributes":414,"./constants":270}],277:[function(require,module,exports){
+},{"../../plots/font_attributes":406,"./constants":262}],269:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -54956,7 +55201,7 @@ function isHoriz(fullData) {
     return out;
 }
 
-},{"../../lib":350,"./layout_attributes":276}],278:[function(require,module,exports){
+},{"../../lib":342,"./layout_attributes":268}],270:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -54979,7 +55224,7 @@ module.exports = function supplyLayoutGlobalDefaults(layoutIn, layoutOut) {
     handleHoverLabelDefaults(layoutIn, layoutOut, coerce);
 };
 
-},{"../../lib":350,"./hoverlabel_defaults":274,"./layout_attributes":276}],279:[function(require,module,exports){
+},{"../../lib":342,"./hoverlabel_defaults":266,"./layout_attributes":268}],271:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55115,7 +55360,7 @@ module.exports = {
     editType: 'arraydraw'
 };
 
-},{"../../plots/cartesian/constants":395}],280:[function(require,module,exports){
+},{"../../plots/cartesian/constants":387}],272:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55198,7 +55443,7 @@ module.exports = function convertCoords(gd, ax, newType, doExtra) {
     }
 };
 
-},{"../../lib/to_log_range":372,"fast-isnumeric":12}],281:[function(require,module,exports){
+},{"../../lib/to_log_range":364,"fast-isnumeric":12}],273:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55259,7 +55504,7 @@ function imageDefaults(imageIn, imageOut, fullLayout) {
     return imageOut;
 }
 
-},{"../../lib":350,"../../plots/array_container_defaults":387,"../../plots/cartesian/axes":390,"./attributes":279}],282:[function(require,module,exports){
+},{"../../lib":342,"../../plots/array_container_defaults":379,"../../plots/cartesian/axes":382,"./attributes":271}],274:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55480,7 +55725,7 @@ module.exports = function draw(gd) {
     }
 };
 
-},{"../../constants/xmlns_namespaces":335,"../../plots/cartesian/axes":390,"../drawing":258,"d3":8}],283:[function(require,module,exports){
+},{"../../constants/xmlns_namespaces":327,"../../plots/cartesian/axes":382,"../drawing":250,"d3":8}],275:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55503,7 +55748,7 @@ module.exports = {
     convertCoords: require('./convert_coords')
 };
 
-},{"./attributes":279,"./convert_coords":280,"./defaults":281,"./draw":282}],284:[function(require,module,exports){
+},{"./attributes":271,"./convert_coords":272,"./defaults":273,"./draw":274}],276:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55552,7 +55797,7 @@ exports.isMiddleAnchor = function isMiddleAnchor(opts) {
     );
 };
 
-},{}],285:[function(require,module,exports){
+},{}],277:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55654,7 +55899,7 @@ module.exports = {
     editType: 'legend'
 };
 
-},{"../../plots/font_attributes":414,"../color/attributes":233}],286:[function(require,module,exports){
+},{"../../plots/font_attributes":406,"../color/attributes":224}],278:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55672,7 +55917,7 @@ module.exports = {
     scrollBarMargin: 4
 };
 
-},{}],287:[function(require,module,exports){
+},{}],279:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -55765,7 +56010,7 @@ module.exports = function legendDefaults(layoutIn, layoutOut, fullData) {
     Lib.noneOrAll(containerIn, containerOut, ['x', 'y']);
 };
 
-},{"../../lib":350,"../../plots/layout_attributes":417,"../../registry":434,"./attributes":285,"./helpers":291}],288:[function(require,module,exports){
+},{"../../lib":342,"../../plots/layout_attributes":409,"../../registry":426,"./attributes":277,"./helpers":283}],280:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -56484,7 +56729,7 @@ function expandHorizontalMargin(gd) {
     });
 }
 
-},{"../../constants/alignment":331,"../../constants/interactions":332,"../../lib":350,"../../lib/svg_text_utils":370,"../../plotly":385,"../../plots/plots":426,"../../registry":434,"../color":234,"../dragelement":255,"../drawing":258,"./anchor_utils":284,"./constants":286,"./get_legend_data":289,"./handle_click":290,"./helpers":291,"./style":293,"d3":8}],289:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../constants/interactions":324,"../../lib":342,"../../lib/svg_text_utils":362,"../../plotly":377,"../../plots/plots":418,"../../registry":426,"../color":225,"../dragelement":247,"../drawing":250,"./anchor_utils":276,"./constants":278,"./get_legend_data":281,"./handle_click":282,"./helpers":283,"./style":285,"d3":8}],281:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -56589,7 +56834,7 @@ module.exports = function getLegendData(calcdata, opts) {
     return legendData;
 };
 
-},{"../../registry":434,"./helpers":291}],290:[function(require,module,exports){
+},{"../../registry":426,"./helpers":283}],282:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -56679,7 +56924,7 @@ module.exports = function handleClick(g, gd, numClicks) {
     }
 
     if(numClicks === 1 && SHOWISOLATETIP && gd.data && gd._context.showTips) {
-        Lib.notifier('Double click on legend to isolate individual trace', 'long');
+        Lib.notifier(require('../../core').uiTexts.isolateTip, 'long');
         SHOWISOLATETIP = false;
     } else {
         SHOWISOLATETIP = false;
@@ -56814,7 +57059,7 @@ module.exports = function handleClick(g, gd, numClicks) {
     }
 };
 
-},{"../../lib":350,"../../plotly":385,"../../registry":434}],291:[function(require,module,exports){
+},{"../../core":328,"../../lib":342,"../../plotly":377,"../../registry":426}],283:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -56845,7 +57090,7 @@ exports.isReversed = function isReversed(legendLayout) {
     return (legendLayout.traceorder || '').indexOf('reversed') !== -1;
 };
 
-},{"../../registry":434}],292:[function(require,module,exports){
+},{"../../registry":426}],284:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -56869,7 +57114,7 @@ module.exports = {
     style: require('./style')
 };
 
-},{"./attributes":285,"./defaults":287,"./draw":288,"./style":293}],293:[function(require,module,exports){
+},{"./attributes":277,"./defaults":279,"./draw":280,"./style":285}],285:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -57069,7 +57314,7 @@ module.exports = function style(s, gd) {
         var trace = d[0].trace,
             pts = d3.select(this).select('g.legendpoints')
                 .selectAll('path.legendbox')
-                .data(Registry.traceIs(trace, 'box') && trace.visible ? [d] : []);
+                .data(Registry.traceIs(trace, 'box-violin') && trace.visible ? [d] : []);
         pts.enter().append('path').classed('legendbox', true)
             // if we want the median bar, prepend M6,0H-6
             .attr('d', 'M6,6H-6V-6H6Z')
@@ -57102,7 +57347,7 @@ module.exports = function style(s, gd) {
     }
 };
 
-},{"../../lib":350,"../../registry":434,"../../traces/pie/style_one":443,"../../traces/scatter/subtypes":466,"../color":234,"../drawing":258,"d3":8}],294:[function(require,module,exports){
+},{"../../lib":342,"../../registry":426,"../../traces/pie/style_one":436,"../../traces/scatter/subtypes":459,"../color":225,"../drawing":250,"d3":8}],286:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -57152,31 +57397,31 @@ var modeBarButtons = module.exports = {};
 
 modeBarButtons.toImage = {
     name: 'toImage',
-    title: 'Download plot as a png',
+    title: require('../../core').uiTexts.toImageButton,
     icon: Icons.camera,
     click: function(gd) {
         var format = 'png';
 
-        Lib.notifier('Taking snapshot - this may take a few seconds', 'long');
+        Lib.notifier(require('../../core').uiTexts.pngSnapshotTip, 'long');
 
         if(Lib.isIE()) {
-            Lib.notifier('IE only supports svg.  Changing format to svg.', 'long');
+            Lib.notifier(require('../../core').uiTexts.svgSnapshotTip, 'long');
             format = 'svg';
         }
 
         downloadImage(gd, {'format': format})
           .then(function(filename) {
-              Lib.notifier('Snapshot succeeded - ' + filename, 'long');
+              Lib.notifier(require('../../core').uiTexts.snapshotSuccessTip + filename, 'long');
           })
           .catch(function() {
-              Lib.notifier('Sorry there was a problem downloading your snapshot!', 'long');
+              Lib.notifier(require('../../core').uiTexts.snapshotErrorTip, 'long');
           });
     }
 };
 
 modeBarButtons.sendDataToCloud = {
     name: 'sendDataToCloud',
-    title: 'Save and edit plot in cloud',
+    title: require('../../core').uiTexts.sendDataToCloudButton,
     icon: Icons.disk,
     click: function(gd) {
         Plots.sendDataToCloud(gd);
@@ -57185,7 +57430,7 @@ modeBarButtons.sendDataToCloud = {
 
 modeBarButtons.zoom2d = {
     name: 'zoom2d',
-    title: 'Zoom',
+    title: require('../../core').uiTexts.zoomButton,
     attr: 'dragmode',
     val: 'zoom',
     icon: Icons.zoombox,
@@ -57194,7 +57439,7 @@ modeBarButtons.zoom2d = {
 
 modeBarButtons.pan2d = {
     name: 'pan2d',
-    title: 'Pan',
+    title: require('../../core').uiTexts.panButton,
     attr: 'dragmode',
     val: 'pan',
     icon: Icons.pan,
@@ -57203,7 +57448,7 @@ modeBarButtons.pan2d = {
 
 modeBarButtons.select2d = {
     name: 'select2d',
-    title: 'Box Select',
+    title: require('../../core').uiTexts.boxSelectButton,
     attr: 'dragmode',
     val: 'select',
     icon: Icons.selectbox,
@@ -57212,7 +57457,7 @@ modeBarButtons.select2d = {
 
 modeBarButtons.lasso2d = {
     name: 'lasso2d',
-    title: 'Lasso Select',
+    title: require('../../core').uiTexts.lassoSelectButton,
     attr: 'dragmode',
     val: 'lasso',
     icon: Icons.lasso,
@@ -57221,7 +57466,7 @@ modeBarButtons.lasso2d = {
 
 modeBarButtons.zoomIn2d = {
     name: 'zoomIn2d',
-    title: 'Zoom in',
+    title: require('../../core').uiTexts.zoomInButton,
     attr: 'zoom',
     val: 'in',
     icon: Icons.zoom_plus,
@@ -57230,7 +57475,7 @@ modeBarButtons.zoomIn2d = {
 
 modeBarButtons.zoomOut2d = {
     name: 'zoomOut2d',
-    title: 'Zoom out',
+    title: require('../../core').uiTexts.zoomOutButton,
     attr: 'zoom',
     val: 'out',
     icon: Icons.zoom_minus,
@@ -57239,7 +57484,7 @@ modeBarButtons.zoomOut2d = {
 
 modeBarButtons.autoScale2d = {
     name: 'autoScale2d',
-    title: 'Autoscale',
+    title: require('../../core').uiTexts.autoscaleButton,
     attr: 'zoom',
     val: 'auto',
     icon: Icons.autoscale,
@@ -57248,7 +57493,7 @@ modeBarButtons.autoScale2d = {
 
 modeBarButtons.resetScale2d = {
     name: 'resetScale2d',
-    title: 'Reset axes',
+    title: require('../../core').uiTexts.resetAxesButton,
     attr: 'zoom',
     val: 'reset',
     icon: Icons.home,
@@ -57257,7 +57502,7 @@ modeBarButtons.resetScale2d = {
 
 modeBarButtons.hoverClosestCartesian = {
     name: 'hoverClosestCartesian',
-    title: 'Show closest data on hover',
+    title: require('../../core').uiTexts.closestDataOnHoverButton,
     attr: 'hovermode',
     val: 'closest',
     icon: Icons.tooltip_basic,
@@ -57267,7 +57512,7 @@ modeBarButtons.hoverClosestCartesian = {
 
 modeBarButtons.hoverCompareCartesian = {
     name: 'hoverCompareCartesian',
-    title: 'Compare data on hover',
+    title: require('../../core').uiTexts.compareDataOnHoverButton,
     attr: 'hovermode',
     val: function(gd) {
         return gd._fullLayout._isHoriz ? 'y' : 'x';
@@ -57361,7 +57606,7 @@ function handleCartesian(gd, ev) {
 
 modeBarButtons.zoom3d = {
     name: 'zoom3d',
-    title: 'Zoom',
+    title: require('../../core').uiTexts.zoomButton,
     attr: 'scene.dragmode',
     val: 'zoom',
     icon: Icons.zoombox,
@@ -57370,7 +57615,7 @@ modeBarButtons.zoom3d = {
 
 modeBarButtons.pan3d = {
     name: 'pan3d',
-    title: 'Pan',
+    title: require('../../core').uiTexts.panButton,
     attr: 'scene.dragmode',
     val: 'pan',
     icon: Icons.pan,
@@ -57379,7 +57624,7 @@ modeBarButtons.pan3d = {
 
 modeBarButtons.orbitRotation = {
     name: 'orbitRotation',
-    title: 'orbital rotation',
+    title: require('../../core').uiTexts.orbitalRotationButton,
     attr: 'scene.dragmode',
     val: 'orbit',
     icon: Icons['3d_rotate'],
@@ -57388,7 +57633,7 @@ modeBarButtons.orbitRotation = {
 
 modeBarButtons.tableRotation = {
     name: 'tableRotation',
-    title: 'turntable rotation',
+    title: require('../../core').uiTexts.turntableRotationButton,
     attr: 'scene.dragmode',
     val: 'turntable',
     icon: Icons['z-axis'],
@@ -57414,7 +57659,7 @@ function handleDrag3d(gd, ev) {
 
 modeBarButtons.resetCameraDefault3d = {
     name: 'resetCameraDefault3d',
-    title: 'Reset camera to default',
+    title: require('../../core').uiTexts.resetCameraButton,
     attr: 'resetDefault',
     icon: Icons.home,
     click: handleCamera3d
@@ -57422,7 +57667,7 @@ modeBarButtons.resetCameraDefault3d = {
 
 modeBarButtons.resetCameraLastSave3d = {
     name: 'resetCameraLastSave3d',
-    title: 'Reset camera to last save',
+    title: require('../../core').uiTexts.resetSavedCameraButton,
     attr: 'resetLastSave',
     icon: Icons.movie,
     click: handleCamera3d
@@ -57453,7 +57698,7 @@ function handleCamera3d(gd, ev) {
 
 modeBarButtons.hoverClosest3d = {
     name: 'hoverClosest3d',
-    title: 'Toggle show closest data on hover',
+    title: require('../../core').uiTexts.closestDataOnHoverButton,
     attr: 'hovermode',
     val: null,
     toggle: true,
@@ -57514,7 +57759,7 @@ function handleHover3d(gd, ev) {
 
 modeBarButtons.zoomInGeo = {
     name: 'zoomInGeo',
-    title: 'Zoom in',
+    title: require('../../core').uiTexts.zoomInButton,
     attr: 'zoom',
     val: 'in',
     icon: Icons.zoom_plus,
@@ -57523,7 +57768,7 @@ modeBarButtons.zoomInGeo = {
 
 modeBarButtons.zoomOutGeo = {
     name: 'zoomOutGeo',
-    title: 'Zoom out',
+    title: require('../../core').uiTexts.zoomOutButton,
     attr: 'zoom',
     val: 'out',
     icon: Icons.zoom_minus,
@@ -57532,7 +57777,7 @@ modeBarButtons.zoomOutGeo = {
 
 modeBarButtons.resetGeo = {
     name: 'resetGeo',
-    title: 'Reset',
+    title: require('../../core').uiTexts.resetGeoButton,
     attr: 'reset',
     val: null,
     icon: Icons.autoscale,
@@ -57541,7 +57786,7 @@ modeBarButtons.resetGeo = {
 
 modeBarButtons.hoverClosestGeo = {
     name: 'hoverClosestGeo',
-    title: 'Toggle show closest data on hover',
+    title: require('../../core').uiTexts.closestDataOnHoverButton,
     attr: 'hovermode',
     val: null,
     toggle: true,
@@ -57574,7 +57819,7 @@ function handleGeo(gd, ev) {
 
 modeBarButtons.hoverClosestGl2d = {
     name: 'hoverClosestGl2d',
-    title: 'Toggle show closest data on hover',
+    title: require('../../core').uiTexts.closestDataOnHoverButton,
     attr: 'hovermode',
     val: null,
     toggle: true,
@@ -57585,7 +57830,7 @@ modeBarButtons.hoverClosestGl2d = {
 
 modeBarButtons.hoverClosestPie = {
     name: 'hoverClosestPie',
-    title: 'Toggle show closest data on hover',
+    title: require('../../core').uiTexts.closestDataOnHoverButton,
     attr: 'hovermode',
     val: 'closest',
     icon: Icons.tooltip_basic,
@@ -57611,7 +57856,7 @@ function toggleHover(gd) {
 
 modeBarButtons.toggleHover = {
     name: 'toggleHover',
-    title: 'Toggle show closest data on hover',
+    title: require('../../core').uiTexts.closestDataOnHoverButton,
     attr: 'hovermode',
     val: null,
     toggle: true,
@@ -57629,7 +57874,7 @@ modeBarButtons.toggleHover = {
 
 modeBarButtons.resetViews = {
     name: 'resetViews',
-    title: 'Reset views',
+    title: require('../../core').uiTexts.resetViewsButton,
     icon: Icons.home,
     click: function(gd, ev) {
         var button = ev.currentTarget;
@@ -57648,7 +57893,7 @@ modeBarButtons.resetViews = {
 
 modeBarButtons.toggleSpikelines = {
     name: 'toggleSpikelines',
-    title: 'Toggle Spike Lines',
+    title: require('../../core').uiTexts.spikeLinesButton,
     icon: Icons.spikeline,
     attr: '_cartesianSpikesEnabled',
     val: 'on',
@@ -57683,7 +57928,7 @@ function setSpikelineVisibility(gd) {
 
 modeBarButtons.resetViewMapbox = {
     name: 'resetViewMapbox',
-    title: 'Reset view',
+    title: require('../../core').uiTexts.resetViewButton,
     attr: 'reset',
     icon: Icons.home,
     click: function(gd) {
@@ -57711,7 +57956,7 @@ function resetView(gd, subplotType) {
     Plotly.relayout(gd, aObj);
 }
 
-},{"../../../build/ploticon":2,"../../lib":350,"../../plotly":385,"../../plots/cartesian/axes":390,"../../plots/plots":426,"../../snapshot/download":436}],295:[function(require,module,exports){
+},{"../../../build/ploticon":2,"../../core":328,"../../lib":342,"../../plotly":377,"../../plots/cartesian/axes":382,"../../plots/plots":418,"../../snapshot/download":428}],287:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -57725,7 +57970,7 @@ function resetView(gd, subplotType) {
 
 exports.manage = require('./manage');
 
-},{"./manage":296}],296:[function(require,module,exports){
+},{"./manage":288}],288:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -57742,7 +57987,6 @@ var scatterSubTypes = require('../../traces/scatter/subtypes');
 var Registry = require('../../registry');
 
 var createModeBar = require('./modebar');
-var modeBarButtons = require('./buttons');
 
 /**
  * ModeBar wrapper around 'create' and 'update',
@@ -57809,6 +58053,7 @@ function getButtonGroups(gd, buttonsToRemove, buttonsToAdd) {
     var hasGL2D = fullLayout._has('gl2d');
     var hasTernary = fullLayout._has('ternary');
     var hasMapbox = fullLayout._has('mapbox');
+    var modeBarButtons = require('./buttons');
 
     var groups = [];
 
@@ -57907,6 +58152,10 @@ function isSelectable(fullData) {
             if(scatterSubTypes.hasMarkers(trace) || scatterSubTypes.hasText(trace)) {
                 selectable = true;
             }
+        } else if(Registry.traceIs(trace, 'box-violin')) {
+            if(trace.boxpoints === 'all' || trace.points === 'all') {
+                selectable = true;
+            }
         }
         // assume that in general if the trace module has selectPoints,
         // then it's selectable. Scatter is an exception to this because it must
@@ -57932,6 +58181,7 @@ function appendButtonsToGroups(groups, buttons) {
 
 // fill in custom buttons referring to default mode bar buttons
 function fillCustomButton(customButtons) {
+    var modeBarButtons = require('./buttons');
     for(var i = 0; i < customButtons.length; i++) {
         var buttonGroup = customButtons[i];
 
@@ -57955,7 +58205,7 @@ function fillCustomButton(customButtons) {
     return customButtons;
 }
 
-},{"../../plots/cartesian/axes":390,"../../registry":434,"../../traces/scatter/subtypes":466,"./buttons":294,"./modebar":297}],297:[function(require,module,exports){
+},{"../../plots/cartesian/axes":382,"../../registry":426,"../../traces/scatter/subtypes":459,"./buttons":286,"./modebar":289}],289:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58249,7 +58499,7 @@ function createModeBar(gd, buttons) {
 
 module.exports = createModeBar;
 
-},{"../../../build/ploticon":2,"../../lib":350,"d3":8}],298:[function(require,module,exports){
+},{"../../../build/ploticon":2,"../../lib":342,"d3":8}],290:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58350,7 +58600,7 @@ module.exports = {
     editType: 'plot'
 };
 
-},{"../../lib/extend":343,"../../plots/font_attributes":414,"../color/attributes":233,"./button_attributes":299}],299:[function(require,module,exports){
+},{"../../lib/extend":335,"../../plots/font_attributes":406,"../color/attributes":224,"./button_attributes":291}],291:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58396,7 +58646,7 @@ module.exports = {
     editType: 'plot'
 };
 
-},{}],300:[function(require,module,exports){
+},{}],292:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58425,7 +58675,7 @@ module.exports = {
     darkAmount: 10
 };
 
-},{}],301:[function(require,module,exports){
+},{}],293:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58524,7 +58774,7 @@ function getPosDflt(containerOut, layout, counterAxes) {
     return [containerOut.domain[0], posY + constants.yPad];
 }
 
-},{"../../lib":350,"../color":234,"./attributes":298,"./button_attributes":299,"./constants":300}],302:[function(require,module,exports){
+},{"../../lib":342,"../color":225,"./attributes":290,"./button_attributes":291,"./constants":292}],294:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58791,7 +59041,7 @@ function reposition(gd, buttons, opts, axName) {
     });
 }
 
-},{"../../constants/alignment":331,"../../lib/svg_text_utils":370,"../../plotly":385,"../../plots/cartesian/axis_ids":393,"../../plots/plots":426,"../color":234,"../drawing":258,"../legend/anchor_utils":284,"./constants":300,"./get_update_object":303,"d3":8}],303:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../lib/svg_text_utils":362,"../../plotly":377,"../../plots/cartesian/axis_ids":385,"../../plots/plots":418,"../color":225,"../drawing":250,"../legend/anchor_utils":276,"./constants":292,"./get_update_object":295,"d3":8}],295:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58848,7 +59098,7 @@ function getXRange(axisLayout, buttonLayout) {
     return [range0, range1];
 }
 
-},{"d3":8}],304:[function(require,module,exports){
+},{"d3":8}],296:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58875,7 +59125,7 @@ module.exports = {
     draw: require('./draw')
 };
 
-},{"./attributes":298,"./defaults":301,"./draw":302}],305:[function(require,module,exports){
+},{"./attributes":290,"./defaults":293,"./draw":294}],297:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58947,7 +59197,7 @@ module.exports = {
     editType: 'calc'
 };
 
-},{"../color/attributes":233}],306:[function(require,module,exports){
+},{"../color/attributes":224}],298:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -58983,7 +59233,7 @@ module.exports = function calcAutorange(gd) {
     }
 };
 
-},{"../../plots/cartesian/axes":390,"./constants":307}],307:[function(require,module,exports){
+},{"../../plots/cartesian/axes":382,"./constants":299}],299:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59035,7 +59285,7 @@ module.exports = {
     extraPad: 15
 };
 
-},{}],308:[function(require,module,exports){
+},{}],300:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59092,7 +59342,7 @@ module.exports = function handleDefaults(layoutIn, layoutOut, axName) {
     containerOut._input = containerIn;
 };
 
-},{"../../lib":350,"./attributes":305}],309:[function(require,module,exports){
+},{"../../lib":342,"./attributes":297}],301:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59643,7 +59893,7 @@ function clearPushMargins(gd) {
     }
 }
 
-},{"../../lib":350,"../../lib/setcursor":368,"../../plotly":385,"../../plots/cartesian":400,"../../plots/cartesian/axes":390,"../../plots/plots":426,"../color":234,"../dragelement":255,"../drawing":258,"./constants":307,"d3":8}],310:[function(require,module,exports){
+},{"../../lib":342,"../../lib/setcursor":360,"../../plotly":377,"../../plots/cartesian":392,"../../plots/cartesian/axes":382,"../../plots/plots":418,"../color":225,"../dragelement":247,"../drawing":250,"./constants":299,"d3":8}],302:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59670,7 +59920,7 @@ module.exports = {
     draw: require('./draw')
 };
 
-},{"./attributes":305,"./calc_autorange":306,"./defaults":308,"./draw":309}],311:[function(require,module,exports){
+},{"./attributes":297,"./calc_autorange":298,"./defaults":300,"./draw":301}],303:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59779,7 +60029,7 @@ module.exports = {
     editType: 'arraydraw'
 };
 
-},{"../../lib/extend":343,"../../traces/scatter/attributes":445,"../annotations/attributes":219,"../drawing/attributes":257}],312:[function(require,module,exports){
+},{"../../lib/extend":335,"../../traces/scatter/attributes":438,"../annotations/attributes":210,"../drawing/attributes":249}],304:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59856,7 +60106,7 @@ function shapeBounds(ax, v0, v1, path, paramsToUse) {
     if(max >= min) return [min, max];
 }
 
-},{"../../lib":350,"../../plots/cartesian/axes":390,"./constants":313,"./helpers":316}],313:[function(require,module,exports){
+},{"../../lib":342,"../../plots/cartesian/axes":382,"./constants":305,"./helpers":308}],305:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59920,7 +60170,7 @@ module.exports = {
     }
 };
 
-},{}],314:[function(require,module,exports){
+},{}],306:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -59945,7 +60195,7 @@ module.exports = function supplyLayoutDefaults(layoutIn, layoutOut) {
     handleArrayContainerDefaults(layoutIn, layoutOut, opts);
 };
 
-},{"../../plots/array_container_defaults":387,"./shape_defaults":318}],315:[function(require,module,exports){
+},{"../../plots/array_container_defaults":379,"./shape_defaults":310}],307:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60005,7 +60255,7 @@ function draw(gd) {
 function drawOne(gd, index) {
     // remove the existing shape if there is one.
     // because indices can change, we need to look in all shape layers
-    gd._fullLayout._paper
+    gd._fullLayout._paperdiv
         .selectAll('.shapelayer [data-index="' + index + '"]')
         .remove();
 
@@ -60322,7 +60572,7 @@ function movePath(pathIn, moveX, moveY) {
     });
 }
 
-},{"../../lib":350,"../../lib/setcursor":368,"../../plotly":385,"../../plots/cartesian/axes":390,"../color":234,"../dragelement":255,"../drawing":258,"./constants":313,"./helpers":316}],316:[function(require,module,exports){
+},{"../../lib":342,"../../lib/setcursor":360,"../../plotly":377,"../../plots/cartesian/axes":382,"../color":225,"../dragelement":247,"../drawing":250,"./constants":305,"./helpers":308}],308:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60403,7 +60653,7 @@ exports.getPixelToData = function(gd, axis, isVertical) {
     return pixelToData;
 };
 
-},{}],317:[function(require,module,exports){
+},{}],309:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60429,7 +60679,7 @@ module.exports = {
     drawOne: drawModule.drawOne
 };
 
-},{"./attributes":311,"./calc_autorange":312,"./defaults":314,"./draw":315}],318:[function(require,module,exports){
+},{"./attributes":303,"./calc_autorange":304,"./defaults":306,"./draw":307}],310:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60528,7 +60778,7 @@ module.exports = function handleShapeDefaults(shapeIn, shapeOut, fullLayout, opt
     return shapeOut;
 };
 
-},{"../../lib":350,"../../plots/cartesian/axes":390,"./attributes":311,"./helpers":316}],319:[function(require,module,exports){
+},{"../../lib":342,"../../plots/cartesian/axes":382,"./attributes":303,"./helpers":308}],311:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60768,7 +61018,7 @@ module.exports = overrideAll({
     }
 }, 'arraydraw', 'from-root');
 
-},{"../../lib/extend":343,"../../plot_api/edit_types":374,"../../plots/animation_attributes":386,"../../plots/font_attributes":414,"../../plots/pad_attributes":425,"./constants":320}],320:[function(require,module,exports){
+},{"../../lib/extend":335,"../../plot_api/edit_types":366,"../../plots/animation_attributes":378,"../../plots/font_attributes":406,"../../plots/pad_attributes":417,"./constants":312}],312:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60862,7 +61112,7 @@ module.exports = {
     currentValueInset: 0,
 };
 
-},{}],321:[function(require,module,exports){
+},{}],313:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -60977,7 +61227,7 @@ function stepsDefaults(sliderIn, sliderOut) {
     return valuesOut;
 }
 
-},{"../../lib":350,"../../plots/array_container_defaults":387,"./attributes":319,"./constants":320}],322:[function(require,module,exports){
+},{"../../lib":342,"../../plots/array_container_defaults":379,"./attributes":311,"./constants":312}],314:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -61598,7 +61848,7 @@ function clearPushMargins(gd) {
     }
 }
 
-},{"../../constants/alignment":331,"../../lib/svg_text_utils":370,"../../plots/plots":426,"../color":234,"../drawing":258,"../legend/anchor_utils":284,"./constants":320,"d3":8}],323:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../lib/svg_text_utils":362,"../../plots/plots":418,"../color":225,"../drawing":250,"../legend/anchor_utils":276,"./constants":312,"d3":8}],315:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -61621,7 +61871,7 @@ module.exports = {
     draw: require('./draw')
 };
 
-},{"./attributes":319,"./constants":320,"./defaults":321,"./draw":322}],324:[function(require,module,exports){
+},{"./attributes":311,"./constants":312,"./defaults":313,"./draw":314}],316:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -61861,7 +62111,7 @@ Titles.draw = function(gd, titleClass, options) {
     el.classed('js-placeholder', isplaceholder);
 };
 
-},{"../../constants/interactions":332,"../../lib":350,"../../lib/svg_text_utils":370,"../../plotly":385,"../../plots/plots":426,"../color":234,"../drawing":258,"d3":8,"fast-isnumeric":12}],325:[function(require,module,exports){
+},{"../../constants/interactions":324,"../../lib":342,"../../lib/svg_text_utils":362,"../../plotly":377,"../../plots/plots":418,"../color":225,"../drawing":250,"d3":8,"fast-isnumeric":12}],317:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -62016,7 +62266,7 @@ module.exports = overrideAll({
     }
 }, 'arraydraw', 'from-root');
 
-},{"../../lib/extend":343,"../../plot_api/edit_types":374,"../../plots/font_attributes":414,"../../plots/pad_attributes":425,"../color/attributes":233}],326:[function(require,module,exports){
+},{"../../lib/extend":335,"../../plot_api/edit_types":366,"../../plots/font_attributes":406,"../../plots/pad_attributes":417,"../color/attributes":224}],318:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -62097,7 +62347,7 @@ module.exports = {
     }
 };
 
-},{}],327:[function(require,module,exports){
+},{}],319:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -62193,7 +62443,7 @@ function buttonsDefaults(menuIn, menuOut) {
     return buttonsOut;
 }
 
-},{"../../lib":350,"../../plots/array_container_defaults":387,"./attributes":325,"./constants":326}],328:[function(require,module,exports){
+},{"../../lib":342,"../../plots/array_container_defaults":379,"./attributes":317,"./constants":318}],320:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -62250,7 +62500,7 @@ module.exports = function draw(gd) {
      */
 
     // draw update menu container
-    var menus = fullLayout._infolayer
+    var menus = fullLayout._menulayer
         .selectAll('g.' + constants.containerClassName)
         .data(menuData.length > 0 ? [0] : []);
 
@@ -62293,6 +62543,9 @@ module.exports = function draw(gd) {
 
     // remove exiting header, remove dropped buttons and reset margins
     if(headerGroups.enter().size()) {
+        // make sure gButton is on top of all headers
+        gButton.node().parentNode.appendChild(gButton.node());
+
         gButton
             .call(removeAllButtons)
             .attr(constants.menuIndexAttrName, '-1');
@@ -62331,13 +62584,12 @@ module.exports = function draw(gd) {
     });
 };
 
+/**
+ * get only visible menus for display
+ */
 function makeMenuData(fullLayout) {
-    var contOpts = fullLayout[constants.name],
-        menuData = [];
-
-    // Filter visible dropdowns and attach '_index' to each
-    // fullLayout options object to be used for 'object constancy'
-    // in the data join key function.
+    var contOpts = fullLayout[constants.name];
+    var menuData = [];
 
     for(var i = 0; i < contOpts.length; i++) {
         var item = contOpts[i];
@@ -62350,7 +62602,7 @@ function makeMenuData(fullLayout) {
 
 // Note that '_index' is set at the default step,
 // it corresponds to the menu index in the user layout update menu container.
-// Because a menu can b set invisible,
+// Because a menu can be set invisible,
 // this is a more 'consistent' field than the index in the menuData.
 function keyFunction(menuOpts) {
     return menuOpts._index;
@@ -62874,9 +63126,9 @@ function clearPushMargins(gd) {
     }
 }
 
-},{"../../constants/alignment":331,"../../lib/svg_text_utils":370,"../../plots/plots":426,"../color":234,"../drawing":258,"../legend/anchor_utils":284,"./constants":326,"./scrollbox":330,"d3":8}],329:[function(require,module,exports){
-arguments[4][323][0].apply(exports,arguments)
-},{"./attributes":325,"./constants":326,"./defaults":327,"./draw":328,"dup":323}],330:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../lib/svg_text_utils":362,"../../plots/plots":418,"../color":225,"../drawing":250,"../legend/anchor_utils":276,"./constants":318,"./scrollbox":322,"d3":8}],321:[function(require,module,exports){
+arguments[4][315][0].apply(exports,arguments)
+},{"./attributes":317,"./constants":318,"./defaults":319,"./draw":320,"dup":315}],322:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63347,7 +63599,7 @@ ScrollBox.prototype.setTranslate = function setTranslate(translateX, translateY)
     }
 };
 
-},{"../../lib":350,"../color":234,"../drawing":258,"d3":8}],331:[function(require,module,exports){
+},{"../../lib":342,"../color":225,"../drawing":250,"d3":8}],323:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63391,7 +63643,7 @@ module.exports = {
     MID_SHIFT: 0.35
 };
 
-},{}],332:[function(require,module,exports){
+},{}],324:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63418,7 +63670,7 @@ module.exports = {
     DESELECTDIM: 0.2
 };
 
-},{}],333:[function(require,module,exports){
+},{}],325:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63477,7 +63729,7 @@ module.exports = {
     MINUS_SIGN: '\u2212'
 };
 
-},{}],334:[function(require,module,exports){
+},{}],326:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63520,7 +63772,7 @@ module.exports = {
     }
 };
 
-},{}],335:[function(require,module,exports){
+},{}],327:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63544,7 +63796,7 @@ exports.svgAttrs = {
     'xmlns:xlink': exports.xlink
 };
 
-},{}],336:[function(require,module,exports){
+},{}],328:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63554,6 +63806,120 @@ exports.svgAttrs = {
 */
 
 'use strict';
+
+/*
+* Hack around the lack of localization support in Plotly by redirecting
+* formatting requests as necessary to a newly constructed French locale
+*/
+var d3 = require('d3');
+var uiTexts = {
+    zoomOutTip: 'Double-click to<br>zoom back out',
+    isolateTip: 'Double click on legend to isolate individual trace',
+    pngSnapshotTip: 'Taking snapshot - this may take a few seconds',
+    svgSnapshotTip: 'IE only supports svg.  Changing format to svg.',
+    snapshotSuccessTip: 'Snapshot succeeded - ',
+    snapshotErrorTip: 'Sorry there was a problem downloading your snapshot!',
+    axisScalingIssueTip: 'Something went wrong with axis scaling',
+    noZZoomTip: 'cannot fast-zsmooth: ',
+    zoomButton: 'Zoom',
+    panButton: 'Pan',
+    boxSelectButton: 'Box select',
+    lassoSelectButton: 'Lasso select',
+    zoomInButton: 'Zoom in',
+    zoomOutButton: 'Zoom out',
+    toImageButton: 'Download plot as a png',
+    sendDataToCloudButton: 'Save and edit plot in cloud',
+    autoscaleButton: 'Autoscale',
+    resetAxesButton: 'Reset axes',
+    closestDataOnHoverButton: 'Show closest data on hover',
+    compareDataOnHoverButton: 'Compare data on hover',
+    orbitalRotationButton: 'Orbital rotation',
+    turntableRotationButton: 'Turntable rotation',
+    resetCameraButton: 'Reset camera to default',
+    resetSavedCameraButton: 'Reset camera to last save',
+    resetGeoButton: 'Reset',
+    resetViewsButton: 'Reset views',
+    resetViewButton: 'Reset view',
+    spikeLinesButton: 'Toggle Spike Lines'
+
+};
+
+/**
+ * Sets the localization to use.
+ * @param {'en'|'fr'} [locale='en']
+ */
+function setLocale(locale) {
+    // Set the d3 locale
+    var LOCALES = {
+        FR: d3.locale({
+            decimal: ',',
+            thousands: ' ',
+            grouping: [3],
+            currency: ['€', ''],
+            dateTime: '%a %b %e %X %Y',
+            date: '%d/%m/%Y',
+            time: '%H:%M:%S',
+            periods: ['AM', 'PM'],
+            days: ['Dimanche', 'lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
+            shortDays: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+            months: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
+            shortMonths: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jui', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+        })
+    };
+    var _numberFormat = d3.format;
+    var _timeFormat = d3.time.format;
+    var _timeUtcFormat = d3.time.format.utc;
+    if(locale && LOCALES[locale.toUpperCase()]) {
+        _numberFormat = LOCALES[locale.toUpperCase()].numberFormat;
+        _timeFormat = LOCALES[locale.toUpperCase()].timeFormat;
+        _timeUtcFormat = LOCALES[locale.toUpperCase()].timeFormat.utc;
+    }
+    d3.format = function() {
+        return _numberFormat.apply(this, arguments);
+    };
+    d3.time.format = function() {
+        return _timeFormat.apply(this, arguments);
+    };
+    d3.time.format.utc = function() {
+        return _timeUtcFormat.apply(this, arguments);
+    };
+    // Set the UI translations
+    if(locale && locale.toUpperCase() === 'FR') {
+        uiTexts.zoomOutTip = 'Double-cliquez pour dézoomer';
+        uiTexts.isolateTip = 'Double-cliquez sur la légende<br>pour isoler un tracé';
+        uiTexts.pngSnapshotTip = 'Export en image en cours...';
+        uiTexts.svgSnapshotTip = 'Votre navigateur supporte seulement le SVG.<br>Conversion du format en SVG.';
+        uiTexts.snapshotSuccessTip = 'Export terminé - ';
+        uiTexts.snapshotErrorTip = 'Désolé, un problème s\'est produit durant le téléchargement de l\'image.';
+        uiTexts.axisScalingIssueTip = 'Une erreur s\'est produite durant le redimensionnement des axes';
+        uiTexts.noZZoomTip = 'Opération impossible : ';
+        uiTexts.zoomButton = 'Zoom';
+        uiTexts.panButton = 'Déplacement';
+        uiTexts.boxSelectButton = 'Sélection rectangulaire';
+        uiTexts.lassoSelectButton = 'Sélection lasso';
+        uiTexts.zoomInButton = 'Zoomer';
+        uiTexts.zoomOutButton = 'Dézoomer';
+        uiTexts.toImageButton = 'Télécharger l\'image du graphique';
+        uiTexts.sendDataToCloudButton = 'Sauvegarder et éditer dans le cloud';
+        uiTexts.autoscaleButton = 'Redimensionnement automatique';
+        uiTexts.resetAxesButton = 'Réinitialiser les axes';
+        uiTexts.closestDataOnHoverButton = 'Afficher les données proches au survol';
+        uiTexts.compareDataOnHoverButton = 'Comparer les données au survol';
+        uiTexts.orbitalRotationButton = 'Rotation orbitale';
+        uiTexts.turntableRotationButton = 'Rotation sur l\'axe Z';
+        uiTexts.resetCameraButton = 'Réinitialiser la caméra';
+        uiTexts.resetSavedCameraButton = 'Dernière position sauvegardée de la caméra';
+        uiTexts.resetGeoButton = 'Réinitialiser';
+        uiTexts.resetViewsButton = 'Réinitialiser les vues';
+        uiTexts.resetViewButton = 'Réinitialiser la vue';
+        uiTexts.spikeLinesButton = 'Affichage des repères au survol';
+    }
+}
+setLocale();
+
+exports.setLocale = setLocale;
+exports.d3 = d3;
+exports.uiTexts = uiTexts;
 
 /*
  * Export the plotly.js API methods.
@@ -63622,10 +63988,8 @@ exports.Snapshot = require('./snapshot');
 exports.PlotSchema = require('./plot_api/plot_schema');
 exports.Queue = require('./lib/queue');
 
-// export d3 used in the bundle
-exports.d3 = require('d3');
 
-},{"../build/plotcss":1,"../build/ploticon":2,"./components/annotations":227,"./components/annotations3d":232,"./components/fx":275,"./components/images":283,"./components/legend":292,"./components/rangeselector":304,"./components/rangeslider":310,"./components/shapes":317,"./components/sliders":323,"./components/updatemenus":329,"./fonts/mathjax_config":337,"./lib/queue":363,"./plot_api/plot_schema":379,"./plot_api/register":380,"./plot_api/set_plot_config":381,"./plot_api/to_image":383,"./plot_api/validate":384,"./plotly":385,"./snapshot":439,"./snapshot/download":436,"./traces/scatter":456,"d3":8,"es6-promise":10}],337:[function(require,module,exports){
+},{"../build/plotcss":1,"../build/ploticon":2,"./components/annotations":218,"./components/annotations3d":223,"./components/fx":267,"./components/images":275,"./components/legend":284,"./components/rangeselector":296,"./components/rangeslider":302,"./components/shapes":309,"./components/sliders":315,"./components/updatemenus":321,"./fonts/mathjax_config":329,"./lib/queue":355,"./plot_api/plot_schema":371,"./plot_api/register":372,"./plot_api/set_plot_config":373,"./plot_api/to_image":375,"./plot_api/validate":376,"./plotly":377,"./snapshot":431,"./snapshot/download":428,"./traces/scatter":449,"d3":8,"es6-promise":10}],329:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63658,7 +64022,7 @@ if(typeof MathJax !== 'undefined') {
     exports.MathJax = false;
 }
 
-},{}],338:[function(require,module,exports){
+},{}],330:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -63691,7 +64055,7 @@ module.exports = function cleanNumber(v) {
     return BADNUM;
 };
 
-},{"../constants/numerical":333,"fast-isnumeric":12}],339:[function(require,module,exports){
+},{"../constants/numerical":325,"fast-isnumeric":12}],331:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -64040,7 +64404,7 @@ exports.validate = function(value, opts) {
     return out !== failed;
 };
 
-},{"../components/colorscale/get_scale":246,"../components/colorscale/scales":252,"../plots/attributes":388,"./nested_property":357,"./regex":364,"fast-isnumeric":12,"tinycolor2":200}],340:[function(require,module,exports){
+},{"../components/colorscale/get_scale":238,"../components/colorscale/scales":244,"../plots/attributes":380,"./nested_property":349,"./regex":356,"fast-isnumeric":12,"tinycolor2":191}],332:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -64052,7 +64416,6 @@ exports.validate = function(value, opts) {
 
 'use strict';
 
-var d3 = require('d3');
 var isNumeric = require('fast-isnumeric');
 
 var logError = require('./loggers').error;
@@ -64067,8 +64430,6 @@ var ONESEC = constants.ONESEC;
 var EPOCHJD = constants.EPOCHJD;
 
 var Registry = require('../registry');
-
-var utcFormat = d3.time.format.utc;
 
 var DATETIME_REGEXP = /^\s*(-?\d\d\d\d|\d\d)(-(\d?\d)(-(\d?\d)([ Tt]([01]?\d|2[0-3])(:([0-5]\d)(:([0-5]\d(\.\d+)?))?(Z|z|[+\-]\d\d:?\d\d)?)?)?)?)?\s*$/m;
 // special regex for chinese calendars to support yyyy-mmi-dd etc for intercalary months
@@ -64289,6 +64650,7 @@ exports.ms2DateTime = function(ms, r, calendar) {
     var msecTenths = Math.floor(mod(ms + 0.05, 1) * 10),
         msRounded = Math.round(ms - msecTenths / 10),
         dateStr, h, m, s, msec10, d;
+    var utcFormat = require('../core').d3.time.format.utc;
 
     if(isWorldCalendar(calendar)) {
         var dateJD = Math.floor(msRounded / ONEDAY) + EPOCHJD,
@@ -64421,6 +64783,7 @@ function modDateFormat(fmt, x, calendar) {
     });
 
     var d = new Date(Math.floor(x + 0.05));
+    var utcFormat = require('../core').d3.time.format.utc;
 
     if(isWorldCalendar(calendar)) {
         try {
@@ -64476,11 +64839,6 @@ function formatTime(x, tr) {
     return timeStr;
 }
 
-var yearFormat = utcFormat('%Y'),
-    monthFormat = utcFormat('%b %Y'),
-    dayFormat = utcFormat('%b %-d'),
-    yearMonthDayFormat = utcFormat('%b %-d, %Y');
-
 function yearFormatWorld(cDate) { return cDate.formatDate('yyyy'); }
 function monthFormatWorld(cDate) { return cDate.formatDate('M yyyy'); }
 function dayFormatWorld(cDate) { return cDate.formatDate('M d'); }
@@ -64504,7 +64862,11 @@ function yearMonthDayFormatWorld(cDate) { return cDate.formatDate('M d, yyyy'); 
 exports.formatDate = function(x, fmt, tr, calendar) {
     var headStr,
         dateStr;
-
+    var utcFormat = require('../core').d3.time.format.utc;
+    var yearFormat = utcFormat('%Y'),
+        monthFormat = utcFormat('%b %Y'),
+        dayFormat = utcFormat('%b %-d'),
+        yearMonthDayFormat = utcFormat('%b %-d, %Y');
     calendar = isWorldCalendar(calendar) && calendar;
 
     if(fmt) return modDateFormat(fmt, x, calendar);
@@ -64668,7 +65030,7 @@ exports.findExactDates = function(data, calendar) {
     };
 };
 
-},{"../constants/numerical":333,"../registry":434,"./loggers":354,"./mod":356,"d3":8,"fast-isnumeric":12}],341:[function(require,module,exports){
+},{"../constants/numerical":325,"../core":328,"../registry":426,"./loggers":346,"./mod":348,"fast-isnumeric":12}],333:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -64697,7 +65059,7 @@ module.exports = function ensureArray(out, n) {
     return out;
 };
 
-},{}],342:[function(require,module,exports){
+},{}],334:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -64863,7 +65225,7 @@ var Events = {
 
 module.exports = Events;
 
-},{"events":11}],343:[function(require,module,exports){
+},{"events":11}],335:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -64977,7 +65339,7 @@ function _extend(inputs, isDeep, keepAllKeys, noArrayCopies) {
     return target;
 }
 
-},{"./is_plain_object.js":352}],344:[function(require,module,exports){
+},{"./is_plain_object.js":344}],336:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65028,7 +65390,7 @@ module.exports = function filterUnique(array) {
     return out;
 };
 
-},{}],345:[function(require,module,exports){
+},{}],337:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65059,7 +65421,7 @@ module.exports = function filterVisible(container) {
     return out;
 };
 
-},{}],346:[function(require,module,exports){
+},{}],338:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65176,7 +65538,7 @@ exports.makeBlank = function() {
     };
 };
 
-},{"../constants/numerical":333}],347:[function(require,module,exports){
+},{"../constants/numerical":325}],339:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65373,7 +65735,56 @@ exports.getVisibleSegment = function getVisibleSegment(path, bounds, buffer) {
     };
 };
 
-},{"./mod":356}],348:[function(require,module,exports){
+/**
+ * Find point on SVG path corresponding to a given constraint coordinate
+ *
+ * @param {SVGPathElement} path
+ * @param {Number} val : constraint coordinate value
+ * @param {String} coord : 'x' or 'y' the constraint coordinate
+ * @param {Object} opts :
+ *  - {Number} pathLength : supply total path length before hand
+ *  - {Number} tolerance
+ *  - {Number} iterationLimit
+ * @return {SVGPoint}
+ */
+exports.findPointOnPath = function findPointOnPath(path, val, coord, opts) {
+    opts = opts || {};
+
+    var pathLength = opts.pathLength || path.getTotalLength();
+    var tolerance = opts.tolerance || 1e-3;
+    var iterationLimit = opts.iterationLimit || 30;
+
+    // if path starts at a val greater than the path tail (like on vertical violins),
+    // we must flip the sign of the computed diff.
+    var mul = path.getPointAtLength(0)[coord] > path.getPointAtLength(pathLength)[coord] ? -1 : 1;
+
+    var i = 0;
+    var b0 = 0;
+    var b1 = pathLength;
+    var mid;
+    var pt;
+    var diff;
+
+    while(i < iterationLimit) {
+        mid = (b0 + b1) / 2;
+        pt = path.getPointAtLength(mid);
+        diff = pt[coord] - val;
+
+        if(Math.abs(diff) < tolerance) {
+            return pt;
+        } else {
+            if(mul * diff > 0) {
+                b1 = mid;
+            } else {
+                b0 = mid;
+            }
+            i++;
+        }
+    }
+    return pt;
+};
+
+},{"./mod":348}],340:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65411,7 +65822,7 @@ module.exports = function(gd) {
     return gd;  // otherwise assume that gd is a DOM element
 };
 
-},{}],349:[function(require,module,exports){
+},{}],341:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65427,7 +65838,7 @@ module.exports = function(gd) {
 
 module.exports = function identity(d) { return d; };
 
-},{}],350:[function(require,module,exports){
+},{}],342:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -65512,6 +65923,7 @@ lib.segmentDistance = geom2dModule.segmentDistance;
 lib.getTextLocation = geom2dModule.getTextLocation;
 lib.clearLocationCache = geom2dModule.clearLocationCache;
 lib.getVisibleSegment = geom2dModule.getVisibleSegment;
+lib.findPointOnPath = geom2dModule.findPointOnPath;
 
 var extendModule = require('./extend');
 lib.extendFlat = extendModule.extendFlat;
@@ -66234,7 +66646,7 @@ lib.templateString = function(string, obj) {
     });
 };
 
-},{"../constants/numerical":333,"./clean_number":338,"./coerce":339,"./dates":340,"./ensure_array":341,"./extend":343,"./filter_unique":344,"./filter_visible":345,"./geometry2d":347,"./get_graph_div":348,"./identity":349,"./is_array":351,"./is_plain_object":352,"./keyed_container":353,"./loggers":354,"./matrix":355,"./mod":356,"./nested_property":357,"./noop":358,"./notifier":359,"./push_unique":362,"./regex":364,"./relative_attr":365,"./relink_private":366,"./search":367,"./stats":369,"./throttle":371,"./to_log_range":372,"d3":8,"fast-isnumeric":12}],351:[function(require,module,exports){
+},{"../constants/numerical":325,"./clean_number":330,"./coerce":331,"./dates":332,"./ensure_array":333,"./extend":335,"./filter_unique":336,"./filter_visible":337,"./geometry2d":339,"./get_graph_div":340,"./identity":341,"./is_array":343,"./is_plain_object":344,"./keyed_container":345,"./loggers":346,"./matrix":347,"./mod":348,"./nested_property":349,"./noop":350,"./notifier":351,"./push_unique":354,"./regex":356,"./relative_attr":357,"./relink_private":358,"./search":359,"./stats":361,"./throttle":363,"./to_log_range":364,"d3":8,"fast-isnumeric":12}],343:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66258,7 +66670,7 @@ module.exports = function isArray(a) {
     return Array.isArray(a) || ab.isView(a);
 };
 
-},{}],352:[function(require,module,exports){
+},{}],344:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66287,7 +66699,7 @@ module.exports = function isPlainObject(obj) {
     );
 };
 
-},{}],353:[function(require,module,exports){
+},{}],345:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66466,7 +66878,7 @@ module.exports = function keyedContainer(baseObj, path, keyName, valueName) {
     return obj;
 };
 
-},{"./nested_property":357}],354:[function(require,module,exports){
+},{"./nested_property":349}],346:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66540,7 +66952,7 @@ function apply(f, args) {
     }
 }
 
-},{"../plot_api/plot_config":378}],355:[function(require,module,exports){
+},{"../plot_api/plot_config":370}],347:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66650,7 +67062,7 @@ exports.apply2DTransform2 = function(transform) {
     };
 };
 
-},{}],356:[function(require,module,exports){
+},{}],348:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66670,7 +67082,7 @@ module.exports = function mod(v, d) {
     return out < 0 ? out + d : out;
 };
 
-},{}],357:[function(require,module,exports){
+},{}],349:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66974,7 +67386,7 @@ function badContainer(container, propStr, propParts) {
     };
 }
 
-},{"../plot_api/container_array_match":373,"./is_array":351,"./is_plain_object":352,"fast-isnumeric":12}],358:[function(require,module,exports){
+},{"../plot_api/container_array_match":365,"./is_array":343,"./is_plain_object":344,"fast-isnumeric":12}],350:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -66990,7 +67402,7 @@ function badContainer(container, propStr, propParts) {
 
 module.exports = function noop() {};
 
-},{}],359:[function(require,module,exports){
+},{}],351:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67072,7 +67484,7 @@ module.exports = function(text, displayLength) {
         });
 };
 
-},{"d3":8,"fast-isnumeric":12}],360:[function(require,module,exports){
+},{"d3":8,"fast-isnumeric":12}],352:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67121,7 +67533,7 @@ module.exports = function overrideCursor(el3, csr) {
     }
 };
 
-},{"./setcursor":368}],361:[function(require,module,exports){
+},{"./setcursor":360}],353:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67362,7 +67774,7 @@ polygon.filter = function filter(pts, tolerance) {
     };
 };
 
-},{"../constants/numerical":333,"./matrix":355}],362:[function(require,module,exports){
+},{"../constants/numerical":325,"./matrix":347}],354:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67400,7 +67812,7 @@ module.exports = function pushUnique(array, item) {
     return array;
 };
 
-},{}],363:[function(require,module,exports){
+},{}],355:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67611,7 +68023,7 @@ queue.plotDo = function(gd, func, args) {
 
 module.exports = queue;
 
-},{"../lib":350,"../plot_api/plot_config":378}],364:[function(require,module,exports){
+},{"../lib":342,"../plot_api/plot_config":370}],356:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67636,7 +68048,7 @@ exports.counter = function(head, tail, openEnded) {
         (tail || '') + (openEnded ? '' : '$'));
 };
 
-},{}],365:[function(require,module,exports){
+},{}],357:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67689,7 +68101,7 @@ module.exports = function(baseAttr, relativeAttr) {
     return baseAttr + relativeAttr;
 };
 
-},{}],366:[function(require,module,exports){
+},{}],358:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67746,7 +68158,7 @@ module.exports = function relinkPrivateKeys(toContainer, fromContainer) {
     }
 };
 
-},{"./is_array":351,"./is_plain_object":352}],367:[function(require,module,exports){
+},{"./is_array":343,"./is_plain_object":344}],359:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67760,6 +68172,11 @@ module.exports = function relinkPrivateKeys(toContainer, fromContainer) {
 
 var isNumeric = require('fast-isnumeric');
 var loggers = require('./loggers');
+
+// don't trust floating point equality - fraction of bin size to call
+// "on the line" and ensure that they go the right way specified by
+// linelow
+var roundingError = 1e-9;
 
 
 /**
@@ -67775,20 +68192,21 @@ var loggers = require('./loggers');
 exports.findBin = function(val, bins, linelow) {
     if(isNumeric(bins.start)) {
         return linelow ?
-            Math.ceil((val - bins.start) / bins.size) - 1 :
-            Math.floor((val - bins.start) / bins.size);
+            Math.ceil((val - bins.start) / bins.size - roundingError) - 1 :
+            Math.floor((val - bins.start) / bins.size + roundingError);
     }
     else {
-        var n1 = 0,
-            n2 = bins.length,
-            c = 0,
-            n,
-            test;
-        if(bins[bins.length - 1] >= bins[0]) {
+        var n1 = 0;
+        var n2 = bins.length;
+        var c = 0;
+        var binSize = (n2 > 1) ? (bins[n2 - 1] - bins[0]) / (n2 - 1) : 1;
+        var n, test;
+        if(binSize >= 0) {
             test = linelow ? lessThan : lessOrEqual;
         } else {
             test = linelow ? greaterOrEqual : greaterThan;
         }
+        val += binSize * roundingError * (linelow ? -1 : 1) * (binSize >= 0 ? 1 : -1);
         // c is just to avoid infinite loops if there's an error
         while(n1 < n2 && c++ < 100) {
             n = Math.floor((n1 + n2) / 2);
@@ -67857,7 +68275,7 @@ exports.roundUp = function(val, arrayIn, reverse) {
     return arrayIn[low];
 };
 
-},{"./loggers":354,"fast-isnumeric":12}],368:[function(require,module,exports){
+},{"./loggers":346,"fast-isnumeric":12}],360:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67880,7 +68298,7 @@ module.exports = function setCursor(el3, csr) {
     if(csr) el3.classed('cursor-' + csr, true);
 };
 
-},{}],369:[function(require,module,exports){
+},{}],361:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -67976,7 +68394,7 @@ exports.interp = function(arr, n) {
     return frac * arr[Math.ceil(n)] + (1 - frac) * arr[Math.floor(n)];
 };
 
-},{"fast-isnumeric":12}],370:[function(require,module,exports){
+},{"fast-isnumeric":12}],362:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -68650,7 +69068,7 @@ exports.makeEditable = function(context, options) {
     return d3.rebind(context, dispatch, 'on');
 };
 
-},{"../constants/alignment":331,"../constants/string_mappings":334,"../constants/xmlns_namespaces":335,"../lib":350,"d3":8}],371:[function(require,module,exports){
+},{"../constants/alignment":323,"../constants/string_mappings":326,"../constants/xmlns_namespaces":327,"../lib":342,"d3":8}],363:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -68754,7 +69172,7 @@ function _clearTimeout(cache) {
     }
 }
 
-},{}],372:[function(require,module,exports){
+},{}],364:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -68782,7 +69200,7 @@ module.exports = function toLogRange(val, range) {
     return newVal;
 };
 
-},{"fast-isnumeric":12}],373:[function(require,module,exports){
+},{"fast-isnumeric":12}],365:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -68840,7 +69258,7 @@ module.exports = function containerArrayMatch(astr) {
     return {array: arrayStr, index: Number(match[1]), property: match[3] || ''};
 };
 
-},{"../registry":434}],374:[function(require,module,exports){
+},{"../registry":426}],366:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -68966,7 +69384,7 @@ function overrideOne(attr, editTypeOverride, overrideContainers, key) {
     }
 }
 
-},{"../lib":350}],375:[function(require,module,exports){
+},{"../lib":342}],367:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -69517,7 +69935,7 @@ exports.clearAxisTypes = function(gd, traces, layoutUpdate) {
     }
 };
 
-},{"../components/color":234,"../lib":350,"../plots/cartesian/axes":390,"../plots/plots":426,"../registry":434,"fast-isnumeric":12,"gl-mat4/fromQuat":24}],376:[function(require,module,exports){
+},{"../components/color":225,"../lib":342,"../plots/cartesian/axes":382,"../plots/plots":418,"../registry":426,"fast-isnumeric":12,"gl-mat4/fromQuat":24}],368:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -69731,7 +70149,7 @@ exports.applyContainerArrayChanges = function applyContainerArrayChanges(gd, np,
     return true;
 };
 
-},{"../lib/is_plain_object":352,"../lib/loggers":354,"../lib/nested_property":357,"../lib/noop":358,"../lib/search":367,"../registry":434,"./container_array_match":373}],377:[function(require,module,exports){
+},{"../lib/is_plain_object":344,"../lib/loggers":346,"../lib/nested_property":349,"../lib/noop":350,"../lib/search":359,"../registry":426,"./container_array_match":365}],369:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -72564,32 +72982,32 @@ function makePlotFramework(gd) {
     // single geo layer for the whole plot
     fullLayout._geolayer = fullLayout._paper.append('g').classed('geolayer', true);
 
-    // upper shape layer
-    // (only for shapes to be drawn above the whole plot, including subplots)
-    var layerAbove = fullLayout._paper.append('g')
-        .classed('layer-above', true);
-    fullLayout._imageUpperLayer = layerAbove.append('g')
-        .classed('imagelayer', true);
-    fullLayout._shapeUpperLayer = layerAbove.append('g')
-        .classed('shapelayer', true);
-
     // single pie layer for the whole plot
     fullLayout._pielayer = fullLayout._paper.append('g').classed('pielayer', true);
 
     // fill in image server scrape-svg
     fullLayout._glimages = fullLayout._paper.append('g').classed('glimages', true);
 
-    // lastly info (legend, annotations) and hover layers go on top
+    // lastly upper shapes, info (legend, annotations) and hover layers go on top
     // these are in a different svg element normally, but get collapsed into a single
     // svg when exporting (after inserting 3D)
+    // upper shapes/images are only those drawn above the whole plot, including subplots
+    var layerAbove = fullLayout._toppaper.append('g')
+        .classed('layer-above', true);
+    fullLayout._imageUpperLayer = layerAbove.append('g')
+        .classed('imagelayer', true);
+    fullLayout._shapeUpperLayer = layerAbove.append('g')
+        .classed('shapelayer', true);
+
     fullLayout._infolayer = fullLayout._toppaper.append('g').classed('infolayer', true);
+    fullLayout._menulayer = fullLayout._toppaper.append('g').classed('menulayer', true);
     fullLayout._zoomlayer = fullLayout._toppaper.append('g').classed('zoomlayer', true);
     fullLayout._hoverlayer = fullLayout._toppaper.append('g').classed('hoverlayer', true);
 
     gd.emit('plotly_framework');
 }
 
-},{"../components/color":234,"../components/drawing":258,"../components/errorbars":264,"../constants/xmlns_namespaces":335,"../lib":350,"../lib/events":342,"../lib/queue":363,"../lib/svg_text_utils":370,"../plotly":385,"../plots/cartesian/axis_ids":393,"../plots/cartesian/constants":395,"../plots/cartesian/constraints":397,"../plots/cartesian/graph_interact":399,"../plots/plots":426,"../plots/polar":429,"../registry":434,"./edit_types":374,"./helpers":375,"./manage_arrays":376,"./plot_schema":379,"./subroutines":382,"d3":8,"fast-isnumeric":12,"has-hover":36}],378:[function(require,module,exports){
+},{"../components/color":225,"../components/drawing":250,"../components/errorbars":256,"../constants/xmlns_namespaces":327,"../lib":342,"../lib/events":334,"../lib/queue":355,"../lib/svg_text_utils":362,"../plotly":377,"../plots/cartesian/axis_ids":385,"../plots/cartesian/constants":387,"../plots/cartesian/constraints":389,"../plots/cartesian/graph_interact":391,"../plots/plots":418,"../plots/polar":421,"../registry":426,"./edit_types":366,"./helpers":367,"./manage_arrays":368,"./plot_schema":371,"./subroutines":374,"d3":8,"fast-isnumeric":12,"has-hover":27}],370:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -72721,7 +73139,7 @@ module.exports = {
     globalTransforms: []
 };
 
-},{}],379:[function(require,module,exports){
+},{}],371:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -73339,7 +73757,7 @@ function insertAttrs(baseAttrs, newAttrs, astr) {
     np.set(extendDeepAll(np.get() || {}, newAttrs));
 }
 
-},{"../lib":350,"../plots/animation_attributes":386,"../plots/attributes":388,"../plots/frame_attributes":415,"../plots/layout_attributes":417,"../plots/polar/area_attributes":427,"../plots/polar/axis_attributes":428,"../registry":434,"./edit_types":374}],380:[function(require,module,exports){
+},{"../lib":342,"../plots/animation_attributes":378,"../plots/attributes":380,"../plots/frame_attributes":407,"../plots/layout_attributes":409,"../plots/polar/area_attributes":419,"../plots/polar/axis_attributes":420,"../registry":426,"./edit_types":366}],372:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -73438,7 +73856,7 @@ function registerComponentModule(newModule) {
     Registry.registerComponent(newModule);
 }
 
-},{"../lib":350,"../registry":434}],381:[function(require,module,exports){
+},{"../lib":342,"../registry":426}],373:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -73464,7 +73882,7 @@ module.exports = function setPlotConfig(configObj) {
     return Lib.extendFlat(Plotly.defaultConfig, configObj);
 };
 
-},{"../lib":350,"../plotly":385}],382:[function(require,module,exports){
+},{"../lib":342,"../plotly":377}],374:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -73981,7 +74399,7 @@ exports.doCamera = function(gd) {
     }
 };
 
-},{"../components/color":234,"../components/drawing":258,"../components/modebar":295,"../components/titles":324,"../lib":350,"../plotly":385,"../plots/cartesian/constants":395,"../plots/cartesian/graph_interact":399,"../plots/plots":426,"../registry":434,"d3":8}],383:[function(require,module,exports){
+},{"../components/color":225,"../components/drawing":250,"../components/modebar":287,"../components/titles":316,"../lib":342,"../plotly":377,"../plots/cartesian/constants":387,"../plots/cartesian/graph_interact":391,"../plots/plots":418,"../registry":426,"d3":8}],375:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74171,7 +74589,7 @@ function toImage(gd, opts) {
 
 module.exports = toImage;
 
-},{"../lib":350,"../plotly":385,"../snapshot/helpers":438,"../snapshot/svgtoimg":440,"../snapshot/tosvg":442}],384:[function(require,module,exports){
+},{"../lib":342,"../plotly":377,"../snapshot/helpers":430,"../snapshot/svgtoimg":432,"../snapshot/tosvg":434}],376:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74556,7 +74974,7 @@ function convertPathToAttributeString(path) {
     return astr;
 }
 
-},{"../lib":350,"../plots/plots":426,"./plot_schema":379}],385:[function(require,module,exports){
+},{"../lib":342,"../plots/plots":418,"./plot_schema":371}],377:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74590,7 +75008,7 @@ exports.ModeBar = require('./components/modebar');
 // plot api
 require('./plot_api/plot_api');
 
-},{"./components/modebar":295,"./plot_api/plot_api":377,"./plot_api/plot_config":378,"./plots/cartesian/axes":390,"./plots/plots":426}],386:[function(require,module,exports){
+},{"./components/modebar":287,"./plot_api/plot_api":369,"./plot_api/plot_config":370,"./plots/cartesian/axes":382,"./plots/plots":418}],378:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74692,7 +75110,7 @@ module.exports = {
     }
 };
 
-},{}],387:[function(require,module,exports){
+},{}],379:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74773,7 +75191,7 @@ module.exports = function handleArrayContainerDefaults(parentObjIn, parentObjOut
     }
 };
 
-},{"../lib":350}],388:[function(require,module,exports){
+},{"../lib":342}],380:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74880,7 +75298,7 @@ module.exports = {
     }
 };
 
-},{"../components/fx/attributes":267}],389:[function(require,module,exports){
+},{"../components/fx/attributes":259}],381:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74909,7 +75327,7 @@ module.exports = {
     }
 };
 
-},{}],390:[function(require,module,exports){
+},{}],382:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -74940,6 +75358,7 @@ var ONEHOUR = constants.ONEHOUR;
 var ONEMIN = constants.ONEMIN;
 var ONESEC = constants.ONESEC;
 var MINUS_SIGN = constants.MINUS_SIGN;
+var BADNUM = constants.BADNUM;
 
 var MID_SHIFT = require('../../constants/alignment').MID_SHIFT;
 
@@ -76128,6 +76547,37 @@ axes.tickText = function(ax, x, hover) {
     return out;
 };
 
+/**
+ * create text for a hover label on this axis, with special handling of
+ * log axes (where negative values can't be displayed but can appear in hover text)
+ *
+ * @param {object} ax: the axis to format text for
+ * @param {number} val: calcdata value to format
+ * @param {Optional(number)} val2: a second value to display
+ *
+ * @returns {string} `val` formatted as a string appropriate to this axis, or
+ *     `val` and `val2` as a range (ie '<val> - <val2>') if `val2` is provided and
+ *     it's different from `val`.
+ */
+axes.hoverLabelText = function(ax, val, val2) {
+    if(val2 !== BADNUM && val2 !== val) {
+        return axes.hoverLabelText(ax, val) + ' - ' + axes.hoverLabelText(ax, val2);
+    }
+
+    var logOffScale = (ax.type === 'log' && val <= 0);
+    var tx = axes.tickText(ax, ax.c2l(logOffScale ? -val : val), 'hover').text;
+
+    if(logOffScale) {
+        return val === 0 ? '0' : MINUS_SIGN + tx;
+    }
+
+    // TODO: should we do something special if the axis calendar and
+    // the data calendar are different? Somehow display both dates with
+    // their system names? Right now it will just display in the axis calendar
+    // but users could add the other one as text.
+    return tx;
+};
+
 function tickTextObj(ax, x, text) {
     var tf = ax.tickfont || {};
 
@@ -76144,7 +76594,7 @@ function tickTextObj(ax, x, text) {
 
 function formatDate(ax, out, hover, extraPrecision) {
     var tr = ax._tickround,
-        fmt = (hover && ax.hoverformat) || ax.tickformat;
+        fmt = (hover && ax.hoverformat) || axes.getTickFormat(ax);
 
     if(extraPrecision) {
         // second or sub-second precision: extra always shows max digits.
@@ -76200,7 +76650,8 @@ function formatDate(ax, out, hover, extraPrecision) {
 
 function formatLog(ax, out, hover, extraPrecision, hideexp) {
     var dtick = ax.dtick,
-        x = out.x;
+        x = out.x,
+        tickformat = ax.tickformat;
 
     if(hideexp === 'never') {
         // If this is a hover label, then we must *never* hide the exponent
@@ -76214,7 +76665,7 @@ function formatLog(ax, out, hover, extraPrecision, hideexp) {
 
     if(extraPrecision && ((typeof dtick !== 'string') || dtick.charAt(0) !== 'L')) dtick = 'L3';
 
-    if(ax.tickformat || (typeof dtick === 'string' && dtick.charAt(0) === 'L')) {
+    if(tickformat || (typeof dtick === 'string' && dtick.charAt(0) === 'L')) {
         out.text = numFormat(Math.pow(10, x), ax, hideexp, extraPrecision);
     }
     else if(isNumeric(dtick) || ((dtick.charAt(0) === 'D') && (Lib.mod(x + 0.01, 1) < 0.1))) {
@@ -76309,7 +76760,7 @@ function numFormat(v, ax, fmtoverride, hover) {
         tickRound = ax._tickround,
         exponentFormat = fmtoverride || ax.exponentformat || 'B',
         exponent = ax._tickexponent,
-        tickformat = ax.tickformat,
+        tickformat = axes.getTickFormat(ax),
         separatethousands = ax.separatethousands;
 
     // special case for hover: set exponent just for this value, and
@@ -76409,6 +76860,76 @@ function numFormat(v, ax, fmtoverride, hover) {
     if(isNeg) return MINUS_SIGN + v;
     return v;
 }
+
+axes.getTickFormat = function(ax) {
+    var i;
+
+    function convertToMs(dtick) {
+        return typeof dtick !== 'string' ? dtick : Number(dtick.replace('M', '')) * ONEAVGMONTH;
+    }
+
+    function compareLogTicks(left, right) {
+        var priority = ['L', 'D'];
+        if(typeof left === typeof right) {
+            if(typeof left === 'number') {
+                return left - right;
+            } else {
+                var leftPriority = priority.indexOf(left.charAt(0));
+                var rightPriority = priority.indexOf(right.charAt(0));
+                if(leftPriority === rightPriority) {
+                    return Number(left.replace(/(L|D)/g, '')) - Number(right.replace(/(L|D)/g, ''));
+                } else {
+                    return leftPriority - rightPriority;
+                }
+            }
+        } else {
+            return typeof left === 'number' ? 1 : -1;
+        }
+    }
+
+    function isProperStop(dtick, range, convert) {
+        var convertFn = convert || function(x) { return x;};
+        var leftDtick = range[0];
+        var rightDtick = range[1];
+        return ((!leftDtick && typeof leftDtick !== 'number') || convertFn(leftDtick) <= convertFn(dtick)) &&
+               ((!rightDtick && typeof rightDtick !== 'number') || convertFn(rightDtick) >= convertFn(dtick));
+    }
+
+    function isProperLogStop(dtick, range) {
+        var isLeftDtickNull = range[0] === null;
+        var isRightDtickNull = range[1] === null;
+        var isDtickInRangeLeft = compareLogTicks(dtick, range[0]) >= 0;
+        var isDtickInRangeRight = compareLogTicks(dtick, range[1]) <= 0;
+        return (isLeftDtickNull || isDtickInRangeLeft) && (isRightDtickNull || isDtickInRangeRight);
+    }
+
+    var tickstop;
+    if(ax.tickformatstops && ax.tickformatstops.length > 0) {
+        switch(ax.type) {
+            case 'date':
+            case 'linear': {
+                for(i = 0; i < ax.tickformatstops.length; i++) {
+                    if(isProperStop(ax.dtick, ax.tickformatstops[i].dtickrange, convertToMs)) {
+                        tickstop = ax.tickformatstops[i];
+                        break;
+                    }
+                }
+                break;
+            }
+            case 'log': {
+                for(i = 0; i < ax.tickformatstops.length; i++) {
+                    if(isProperLogStop(ax.dtick, ax.tickformatstops[i].dtickrange)) {
+                        tickstop = ax.tickformatstops[i];
+                        break;
+                    }
+                }
+                break;
+            }
+            default:
+        }
+    }
+    return tickstop ? tickstop.value : ax.tickformat;
+};
 
 axes.subplotMatch = /^x([0-9]*)y([0-9]*)$/;
 
@@ -77330,7 +77851,7 @@ function swapAxisAttrs(layout, key, xFullAxes, yFullAxes) {
     }
 }
 
-},{"../../components/color":234,"../../components/drawing":258,"../../components/titles":324,"../../constants/alignment":331,"../../constants/numerical":333,"../../lib":350,"../../lib/svg_text_utils":370,"../../registry":434,"./axis_autotype":391,"./axis_ids":393,"./layout_attributes":401,"./layout_defaults":402,"./set_convert":407,"d3":8,"fast-isnumeric":12}],391:[function(require,module,exports){
+},{"../../components/color":225,"../../components/drawing":250,"../../components/titles":316,"../../constants/alignment":323,"../../constants/numerical":325,"../../lib":342,"../../lib/svg_text_utils":362,"../../registry":426,"./axis_autotype":383,"./axis_ids":385,"./layout_attributes":393,"./layout_defaults":394,"./set_convert":399,"d3":8,"fast-isnumeric":12}],383:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -77405,7 +77926,7 @@ function category(a) {
     return curvecats > curvenums * 2;
 }
 
-},{"../../constants/numerical":333,"../../lib":350,"fast-isnumeric":12}],392:[function(require,module,exports){
+},{"../../constants/numerical":325,"../../lib":342,"fast-isnumeric":12}],384:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -77528,7 +78049,7 @@ module.exports = function handleAxisDefaults(containerIn, containerOut, coerce, 
     return containerOut;
 };
 
-},{"../../components/color/attributes":233,"../../lib":350,"../../registry":434,"./category_order_defaults":394,"./layout_attributes":401,"./ordered_categories":403,"./set_convert":407,"./tick_label_defaults":408,"./tick_mark_defaults":409,"./tick_value_defaults":410,"tinycolor2":200}],393:[function(require,module,exports){
+},{"../../components/color/attributes":224,"../../lib":342,"../../registry":426,"./category_order_defaults":386,"./layout_attributes":393,"./ordered_categories":395,"./set_convert":399,"./tick_label_defaults":400,"./tick_mark_defaults":401,"./tick_value_defaults":402,"tinycolor2":191}],385:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -77650,7 +78171,7 @@ exports.getFromTrace = function(gd, fullTrace, type) {
     return ax;
 };
 
-},{"../../lib":350,"../../registry":434,"../plots":426,"./constants":395}],394:[function(require,module,exports){
+},{"../../lib":342,"../../registry":426,"../plots":418,"./constants":387}],386:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -77684,7 +78205,7 @@ module.exports = function handleCategoryOrderDefaults(containerIn, containerOut,
     }
 };
 
-},{}],395:[function(require,module,exports){
+},{}],387:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -77744,18 +78265,13 @@ module.exports = {
     DFLTRANGEX: [-1, 6],
     DFLTRANGEY: [-1, 4],
 
-    // Layers to keep trace types in the right order.
-    // from back to front:
-    // 1. heatmaps, 2D histos and contour maps
-    // 2. bars / 1D histos
-    // 3. errorbars for bars and scatter
-    // 4. scatter
-    // 5. box plots
+    // Layers to keep trace types in the right order
     traceLayerClasses: [
         'imagelayer',
         'maplayer',
         'barlayer',
         'carpetlayer',
+        'violinlayer',
         'boxlayer',
         'scatterlayer'
     ],
@@ -77766,7 +78282,7 @@ module.exports = {
     }
 };
 
-},{"../../lib":350}],396:[function(require,module,exports){
+},{"../../lib":342}],388:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -77920,7 +78436,7 @@ function updateConstraintGroups(constraintGroups, thisGroup, thisID, scaleanchor
     thisGroup[scaleanchor] = 1;
 }
 
-},{"../../lib":350,"./axis_ids":393}],397:[function(require,module,exports){
+},{"../../lib":342,"./axis_ids":385}],389:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -78125,7 +78641,7 @@ function updateDomain(ax, factor) {
     ];
 }
 
-},{"../../constants/alignment":331,"../../constants/numerical":333,"./axis_ids":393,"./scale_zoom":405}],398:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../constants/numerical":325,"./axis_ids":385,"./scale_zoom":397}],390:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -78421,7 +78937,7 @@ module.exports = function dragBox(gd, plotinfo, x, y, w, h, ns, ew) {
         dragTail(zoomMode);
 
         if(SHOWZOOMOUTTIP && gd.data && gd._context.showTips) {
-            Lib.notifier('Double-click to<br>zoom back out', 'long');
+            Lib.notifier(require('../../core').uiTexts.zoomOutTip, 'long');
             SHOWZOOMOUTTIP = false;
         }
     }
@@ -79141,7 +79657,7 @@ function calcLinks(constraintGroups, xIDs, yIDs) {
     };
 }
 
-},{"../../components/color":234,"../../components/dragelement":255,"../../components/drawing":258,"../../constants/alignment":331,"../../lib":350,"../../lib/setcursor":368,"../../lib/svg_text_utils":370,"../../plotly":385,"../../registry":434,"../plots":426,"./axes":390,"./axis_ids":393,"./constants":395,"./scale_zoom":405,"./select":406,"d3":8,"tinycolor2":200}],399:[function(require,module,exports){
+},{"../../components/color":225,"../../components/dragelement":247,"../../components/drawing":250,"../../constants/alignment":323,"../../core":328,"../../lib":342,"../../lib/setcursor":360,"../../lib/svg_text_utils":362,"../../plotly":377,"../../registry":426,"../plots":418,"./axes":382,"./axis_ids":385,"./constants":387,"./scale_zoom":397,"./select":398,"d3":8,"tinycolor2":191}],391:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -79300,7 +79816,7 @@ module.exports = function initInteractions(gd) {
     };
 };
 
-},{"../../components/dragelement":255,"../../components/fx":275,"./constants":395,"./dragbox":398,"fast-isnumeric":12}],400:[function(require,module,exports){
+},{"../../components/dragelement":247,"../../components/fx":267,"./constants":387,"./dragbox":390,"fast-isnumeric":12}],392:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -79705,7 +80221,7 @@ function joinLayer(parent, nodeType, className) {
     return layer;
 }
 
-},{"../../lib":350,"../plots":426,"./attributes":389,"./axis_ids":393,"./constants":395,"./layout_attributes":401,"./transition_axes":411,"d3":8}],401:[function(require,module,exports){
+},{"../../lib":342,"../plots":418,"./attributes":381,"./axis_ids":385,"./constants":387,"./layout_attributes":393,"./transition_axes":403,"d3":8}],393:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -80017,6 +80533,28 @@ module.exports = {
         editType: 'ticks',
         
     },
+    tickformatstops: {
+        _isLinkedToArray: 'tickformatstop',
+
+        dtickrange: {
+            valType: 'info_array',
+            
+            items: [
+                {valType: 'any', editType: 'ticks'},
+                {valType: 'any', editType: 'ticks'}
+            ],
+            editType: 'ticks',
+            
+        },
+        value: {
+            valType: 'string',
+            dflt: '',
+            
+            editType: 'ticks',
+            
+        },
+        editType: 'ticks'
+    },
     hoverformat: {
         valType: 'string',
         dflt: '',
@@ -80182,7 +80720,7 @@ module.exports = {
     }
 };
 
-},{"../../components/color/attributes":233,"../../components/drawing/attributes":257,"../../lib/extend":343,"../font_attributes":414,"./constants":395}],402:[function(require,module,exports){
+},{"../../components/color/attributes":224,"../../components/drawing/attributes":249,"../../lib/extend":335,"../font_attributes":406,"./constants":387}],394:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -80455,7 +80993,7 @@ module.exports = function supplyLayoutDefaults(layoutIn, layoutOut, fullData) {
     }
 };
 
-},{"../../components/color":234,"../../lib":350,"../../registry":434,"../layout_attributes":417,"./axis_defaults":392,"./axis_ids":393,"./constants":395,"./constraint_defaults":396,"./layout_attributes":401,"./position_defaults":404,"./type_defaults":412}],403:[function(require,module,exports){
+},{"../../components/color":225,"../../lib":342,"../../registry":426,"../layout_attributes":409,"./axis_defaults":384,"./axis_ids":385,"./constants":387,"./constraint_defaults":388,"./layout_attributes":393,"./position_defaults":396,"./type_defaults":404}],395:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -80534,7 +81072,7 @@ module.exports = function orderedCategories(axisLetter, categoryorder, categorya
     }
 };
 
-},{"d3":8}],404:[function(require,module,exports){
+},{"d3":8}],396:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -80601,7 +81139,7 @@ module.exports = function handlePositionDefaults(containerIn, containerOut, coer
     return containerOut;
 };
 
-},{"../../lib":350,"fast-isnumeric":12}],405:[function(require,module,exports){
+},{"../../lib":342,"fast-isnumeric":12}],397:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -80629,7 +81167,7 @@ module.exports = function scaleZoom(ax, factor, centerFraction) {
     ];
 };
 
-},{"../../constants/alignment":331}],406:[function(require,module,exports){
+},{"../../constants/alignment":323}],398:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -80879,7 +81417,7 @@ function fillSelectionItem(selection, searchInfo) {
     return selection;
 }
 
-},{"../../components/color":234,"../../components/fx/helpers":272,"../../lib/polygon":361,"../../lib/throttle":371,"./axes":390,"./constants":395}],407:[function(require,module,exports){
+},{"../../components/color":225,"../../components/fx/helpers":264,"../../lib/polygon":353,"../../lib/throttle":363,"./axes":382,"./constants":387}],399:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -81264,7 +81802,7 @@ module.exports = function setConvert(ax, fullLayout) {
 
         if(!isFinite(ax._m) || !isFinite(ax._b)) {
             Lib.notifier(
-                'Something went wrong with axis scaling',
+              require('../../core').uiTexts.axisScalingIssueTip,
                 'long');
             fullLayout._replotting = false;
             throw new Error('axis scaling');
@@ -81344,7 +81882,7 @@ module.exports = function setConvert(ax, fullLayout) {
     delete ax._forceTick0;
 };
 
-},{"../../constants/numerical":333,"../../lib":350,"./axis_ids":393,"./constants":395,"d3":8,"fast-isnumeric":12}],408:[function(require,module,exports){
+},{"../../constants/numerical":325,"../../core":328,"../../lib":342,"./axis_ids":385,"./constants":387,"d3":8,"fast-isnumeric":12}],400:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -81357,7 +81895,7 @@ module.exports = function setConvert(ax, fullLayout) {
 'use strict';
 
 var Lib = require('../../lib');
-
+var layoutAttributes = require('./layout_attributes');
 
 /**
  * options: inherits font, outerTicks, noHover from axes.handleAxisDefaults
@@ -81387,6 +81925,7 @@ module.exports = function handleTickLabelDefaults(containerIn, containerOut, coe
 
         if(axType !== 'category') {
             var tickFormat = coerce('tickformat');
+            tickformatstopsDefaults(containerIn, containerOut);
             if(!tickFormat && axType !== 'date') {
                 coerce('showexponent', showAttrDflt);
                 coerce('exponentformat');
@@ -81428,7 +81967,30 @@ function getShowAttrDflt(containerIn) {
     }
 }
 
-},{"../../lib":350}],409:[function(require,module,exports){
+function tickformatstopsDefaults(tickformatIn, tickformatOut) {
+    var valuesIn = tickformatIn.tickformatstops;
+    var valuesOut = tickformatOut.tickformatstops = [];
+
+    if(!Array.isArray(valuesIn)) return;
+
+    var valueIn, valueOut;
+
+    function coerce(attr, dflt) {
+        return Lib.coerce(valueIn, valueOut, layoutAttributes.tickformatstops, attr, dflt);
+    }
+
+    for(var i = 0; i < valuesIn.length; i++) {
+        valueIn = valuesIn[i];
+        valueOut = {};
+
+        coerce('dtickrange');
+        coerce('value');
+
+        valuesOut.push(valueOut);
+    }
+}
+
+},{"../../lib":342,"./layout_attributes":393}],401:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -81461,7 +82023,7 @@ module.exports = function handleTickDefaults(containerIn, containerOut, coerce, 
     }
 };
 
-},{"../../lib":350,"./layout_attributes":401}],410:[function(require,module,exports){
+},{"../../lib":342,"./layout_attributes":393}],402:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -81545,7 +82107,7 @@ module.exports = function handleTickValueDefaults(containerIn, containerOut, coe
     }
 };
 
-},{"../../constants/numerical":333,"../../lib":350,"fast-isnumeric":12}],411:[function(require,module,exports){
+},{"../../constants/numerical":325,"../../lib":342,"fast-isnumeric":12}],403:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -81880,7 +82442,7 @@ module.exports = function transitionAxes(gd, newLayout, transitionOpts, makeOnCo
     return Promise.resolve();
 };
 
-},{"../../components/drawing":258,"../../plotly":385,"../../registry":434,"./axes":390,"./constants":395,"d3":8}],412:[function(require,module,exports){
+},{"../../components/drawing":250,"../../plotly":377,"../../registry":426,"./axes":382,"./constants":387,"d3":8}],404:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -81958,7 +82520,7 @@ function setAutoType(ax, data) {
 
         for(var i = 0; i < data.length; i++) {
             trace = data[i];
-            if(!Registry.traceIs(trace, 'box') ||
+            if(!Registry.traceIs(trace, 'box-violin') ||
                (trace[axLetter + 'axis'] || axLetter) !== id) continue;
 
             if(trace[posLetter] !== undefined) boxPositions.push(trace[posLetter][0]);
@@ -81996,7 +82558,7 @@ function getBoxPosLetter(trace) {
 
 function isBoxWithoutPositionCoords(trace, axLetter) {
     var posLetter = getBoxPosLetter(trace),
-        isBox = Registry.traceIs(trace, 'box'),
+        isBox = Registry.traceIs(trace, 'box-violin'),
         isCandlestick = Registry.traceIs(trace._fullInput || {}, 'candlestick');
 
     return (
@@ -82008,7 +82570,7 @@ function isBoxWithoutPositionCoords(trace, axLetter) {
     );
 }
 
-},{"../../registry":434,"./axis_autotype":391,"./axis_ids":393}],413:[function(require,module,exports){
+},{"../../registry":426,"./axis_autotype":383,"./axis_ids":385}],405:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82435,7 +82997,7 @@ function crawl(attrs, callback, path, depth) {
     });
 }
 
-},{"../lib":350,"../plotly":385}],414:[function(require,module,exports){
+},{"../lib":342,"../plotly":377}],406:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82500,7 +83062,7 @@ module.exports = function(opts) {
     return attrs;
 };
 
-},{}],415:[function(require,module,exports){
+},{}],407:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82546,7 +83108,7 @@ module.exports = {
     }
 };
 
-},{}],416:[function(require,module,exports){
+},{}],408:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82580,7 +83142,7 @@ function project(camera, v) {
 
 module.exports = project;
 
-},{}],417:[function(require,module,exports){
+},{}],409:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82719,14 +83281,6 @@ module.exports = {
         editType: 'plot',
         
     },
-    smith: {
-        // will become a boolean if/when we implement this
-        valType: 'enumerated',
-        
-        values: [false],
-        dflt: false,
-        editType: 'none'
-    },
     showlegend: {
         // handled in legend.supplyLayoutDefaults
         // but included here because it's not in the legend object
@@ -82737,7 +83291,7 @@ module.exports = {
     }
 };
 
-},{"../components/color/attributes":233,"./font_attributes":414}],418:[function(require,module,exports){
+},{"../components/color/attributes":224,"./font_attributes":406}],410:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82767,7 +83321,7 @@ module.exports = {
     mapOnErrorMsg: 'Mapbox error.'
 };
 
-},{}],419:[function(require,module,exports){
+},{}],411:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -82841,7 +83395,7 @@ module.exports = function convertTextOpts(textposition, iconSize) {
     return { anchor: anchor, offset: offset };
 };
 
-},{"../../lib":350}],420:[function(require,module,exports){
+},{"../../lib":342}],412:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -83004,7 +83558,7 @@ exports.updateFx = function(fullLayout) {
     }
 };
 
-},{"../../constants/xmlns_namespaces":335,"../../lib":350,"../plots":426,"./constants":418,"./layout_attributes":422,"./layout_defaults":423,"./mapbox":424,"mapbox-gl":84}],421:[function(require,module,exports){
+},{"../../constants/xmlns_namespaces":327,"../../lib":342,"../plots":418,"./constants":410,"./layout_attributes":414,"./layout_defaults":415,"./mapbox":416,"mapbox-gl":75}],413:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -83229,7 +83783,7 @@ module.exports = function createMapboxLayer(mapbox, index, opts) {
     return mapboxLayer;
 };
 
-},{"../../lib":350,"./convert_text_opts":419}],422:[function(require,module,exports){
+},{"../../lib":342,"./convert_text_opts":411}],414:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -83433,7 +83987,7 @@ module.exports = overrideAll({
     }
 }, 'plot', 'from-root');
 
-},{"../../components/color":234,"../../lib":350,"../../plot_api/edit_types":374,"../../traces/scatter/attributes":445,"../font_attributes":414}],423:[function(require,module,exports){
+},{"../../components/color":225,"../../lib":342,"../../plot_api/edit_types":366,"../../traces/scatter/attributes":438,"../font_attributes":406}],415:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -83529,7 +84083,7 @@ function handleLayerDefaults(containerIn, containerOut) {
     }
 }
 
-},{"../../lib":350,"../subplot_defaults":433,"./layout_attributes":422}],424:[function(require,module,exports){
+},{"../../lib":342,"../subplot_defaults":425,"./layout_attributes":414}],416:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -84081,7 +84635,7 @@ function convertCenter(center) {
     return [center.lon, center.lat];
 }
 
-},{"../../components/dragelement":255,"../../components/fx":275,"../../lib":350,"../cartesian/select":406,"./constants":418,"./layers":421,"./layout_attributes":422,"mapbox-gl":84}],425:[function(require,module,exports){
+},{"../../components/dragelement":247,"../../components/fx":267,"../../lib":342,"../cartesian/select":398,"./constants":410,"./layers":413,"./layout_attributes":414,"mapbox-gl":75}],417:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -84127,7 +84681,7 @@ module.exports = {
     editType: 'arraydraw'
 };
 
-},{}],426:[function(require,module,exports){
+},{}],418:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -85267,7 +85821,6 @@ plots.supplyLayoutGlobalDefaults = function(layoutIn, layoutOut) {
 
     coerce('separators');
     coerce('hidesources');
-    coerce('smith');
 
     Registry.getComponentMethod(
         'calendars',
@@ -85473,7 +86026,6 @@ plots.purge = function(gd) {
     delete gd.firstscatter;
     delete gd._hmlumcount;
     delete gd._hmpixcount;
-    delete gd.numboxes;
     delete gd._transitionData;
     delete gd._transitioning;
     delete gd._initialAutoSize;
@@ -86290,8 +86842,12 @@ plots.doCalcdata = function(gd, traces) {
     // firstscatter: fill-to-next on the first trace goes to zero
     gd.firstscatter = true;
 
-    // how many box plots do we have (in case they're grouped)
-    gd.numboxes = 0;
+    // how many box/violins plots do we have (in case they're grouped)
+    fullLayout._numBoxes = 0;
+    fullLayout._numViolins = 0;
+
+    // initialize violin per-scale-group stats container
+    fullLayout._violinScaleGroupStats = {};
 
     // for calculating avg luminosity of heatmaps
     gd._hmpixcount = 0;
@@ -86471,7 +87027,7 @@ plots.generalUpdatePerTraceModule = function(subplot, subplotCalcData, subplotLa
     subplot.traceHash = traceHash;
 };
 
-},{"../components/color":234,"../components/errorbars":264,"../constants/numerical":333,"../lib":350,"../plot_api/plot_schema":379,"../plotly":385,"../registry":434,"./animation_attributes":386,"./attributes":388,"./command":413,"./font_attributes":414,"./frame_attributes":415,"./layout_attributes":417,"d3":8,"fast-isnumeric":12}],427:[function(require,module,exports){
+},{"../components/color":225,"../components/errorbars":256,"../constants/numerical":325,"../lib":342,"../plot_api/plot_schema":371,"../plotly":377,"../registry":426,"./animation_attributes":378,"./attributes":380,"./command":405,"./font_attributes":406,"./frame_attributes":407,"./layout_attributes":409,"d3":8,"fast-isnumeric":12}],419:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -86497,7 +87053,7 @@ module.exports = {
     }
 };
 
-},{"../../traces/scatter/attributes":445}],428:[function(require,module,exports){
+},{"../../traces/scatter/attributes":438}],420:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -86613,7 +87169,7 @@ module.exports = overrideAll({
     }
 }, 'plot', 'nested');
 
-},{"../../lib/extend":343,"../../plot_api/edit_types":374,"../cartesian/layout_attributes":401}],429:[function(require,module,exports){
+},{"../../lib/extend":335,"../../plot_api/edit_types":366,"../cartesian/layout_attributes":393}],421:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -86628,7 +87184,7 @@ var Polar = module.exports = require('./micropolar');
 
 Polar.manager = require('./micropolar_manager');
 
-},{"./micropolar":430,"./micropolar_manager":431}],430:[function(require,module,exports){
+},{"./micropolar":422,"./micropolar_manager":423}],422:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88048,7 +88604,7 @@ var µ = module.exports = { version: '0.2.2' };
     return exports;
 };
 
-},{"../../constants/alignment":331,"../../lib":350,"d3":8}],431:[function(require,module,exports){
+},{"../../constants/alignment":323,"../../lib":342,"d3":8}],423:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88134,7 +88690,7 @@ manager.fillLayout = function(_gd) {
     _gd._fullLayout = extendDeepAll(dflts, _gd.layout);
 };
 
-},{"../../components/color":234,"../../lib":350,"./micropolar":430,"./undo_manager":432,"d3":8}],432:[function(require,module,exports){
+},{"../../components/color":225,"../../lib":342,"./micropolar":422,"./undo_manager":424,"d3":8}],424:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88200,7 +88756,7 @@ module.exports = function UndoManager() {
     };
 };
 
-},{}],433:[function(require,module,exports){
+},{}],425:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88275,7 +88831,7 @@ module.exports = function handleSubplotDefaults(layoutIn, layoutOut, fullData, o
     }
 };
 
-},{"../lib":350,"./plots":426}],434:[function(require,module,exports){
+},{"../lib":342,"./plots":418}],426:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88590,7 +89146,7 @@ function getTraceType(traceType) {
     return traceType;
 }
 
-},{"./lib/extend":343,"./lib/loggers":354,"./lib/noop":358,"./lib/push_unique":362,"./plots/attributes":388,"./plots/layout_attributes":417}],435:[function(require,module,exports){
+},{"./lib/extend":335,"./lib/loggers":346,"./lib/noop":350,"./lib/push_unique":354,"./plots/attributes":380,"./plots/layout_attributes":409}],427:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88762,7 +89318,7 @@ module.exports = function clonePlot(graphObj, options) {
     return plotTile;
 };
 
-},{"../lib":350,"../plots/plots":426}],436:[function(require,module,exports){
+},{"../lib":342,"../plots/plots":418}],428:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88828,7 +89384,7 @@ function downloadImage(gd, opts) {
 
 module.exports = downloadImage;
 
-},{"../lib":350,"../plot_api/to_image":383,"./filesaver":437}],437:[function(require,module,exports){
+},{"../lib":342,"../plot_api/to_image":375,"./filesaver":429}],429:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88900,7 +89456,7 @@ var fileSaver = function(url, name) {
 
 module.exports = fileSaver;
 
-},{}],438:[function(require,module,exports){
+},{}],430:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88933,7 +89489,7 @@ exports.getRedrawFunc = function(gd) {
     };
 };
 
-},{}],439:[function(require,module,exports){
+},{}],431:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -88959,7 +89515,7 @@ var Snapshot = {
 
 module.exports = Snapshot;
 
-},{"./cloneplot":435,"./download":436,"./helpers":438,"./svgtoimg":440,"./toimage":441,"./tosvg":442}],440:[function(require,module,exports){
+},{"./cloneplot":427,"./download":428,"./helpers":430,"./svgtoimg":432,"./toimage":433,"./tosvg":434}],432:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89075,7 +89631,7 @@ function svgToImg(opts) {
 
 module.exports = svgToImg;
 
-},{"../lib":350,"events":11}],441:[function(require,module,exports){
+},{"../lib":342,"events":11}],433:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89155,7 +89711,7 @@ function toImage(gd, opts) {
 
 module.exports = toImage;
 
-},{"../lib":350,"../plotly":385,"./cloneplot":435,"./helpers":438,"./svgtoimg":440,"./tosvg":442,"events":11}],442:[function(require,module,exports){
+},{"../lib":342,"../plotly":377,"./cloneplot":427,"./helpers":430,"./svgtoimg":432,"./tosvg":434,"events":11}],434:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89332,7 +89888,49 @@ module.exports = function toSVG(gd, format, scale) {
     return s;
 };
 
-},{"../components/color":234,"../components/drawing":258,"../constants/xmlns_namespaces":335,"../lib":350,"d3":8}],443:[function(require,module,exports){
+},{"../components/color":225,"../components/drawing":250,"../constants/xmlns_namespaces":327,"../lib":342,"d3":8}],435:[function(require,module,exports){
+/**
+* Copyright 2012-2017, Plotly, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the MIT license found in the
+* LICENSE file in the root directory of this source tree.
+*/
+
+'use strict';
+
+var Lib = require('../../lib');
+
+exports.formatPiePercent = function formatPiePercent(v, separators) {
+    var vRounded = (v * 100).toPrecision(3);
+    if(vRounded.lastIndexOf('.') !== -1) {
+        vRounded = vRounded.replace(/[.]?0+$/, '');
+    }
+    return Lib.numSeparate(vRounded, separators) + '%';
+};
+
+exports.formatPieValue = function formatPieValue(v, separators) {
+    var vRounded = v.toPrecision(10);
+    if(vRounded.lastIndexOf('.') !== -1) {
+        vRounded = vRounded.replace(/[.]?0+$/, '');
+    }
+    return Lib.numSeparate(vRounded, separators);
+};
+
+exports.getFirstFilled = function getFirstFilled(array, indices) {
+    if(!Array.isArray(array)) return;
+    for(var i = 0; i < indices.length; i++) {
+        var v = array[indices[i]];
+        if(v || v === 0) return v;
+    }
+};
+
+exports.castOption = function castOption(item, indices) {
+    if(Array.isArray(item)) return exports.getFirstFilled(item, indices);
+    else if(item) return item;
+};
+
+},{"../../lib":342}],436:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89344,20 +89942,19 @@ module.exports = function toSVG(gd, format, scale) {
 'use strict';
 
 var Color = require('../../components/color');
+var castOption = require('./helpers').castOption;
 
 module.exports = function styleOne(s, pt, trace) {
-    var lineColor = trace.marker.line.color;
-    if(Array.isArray(lineColor)) lineColor = lineColor[pt.i] || Color.defaultLine;
-
-    var lineWidth = trace.marker.line.width || 0;
-    if(Array.isArray(lineWidth)) lineWidth = lineWidth[pt.i] || 0;
+    var line = trace.marker.line;
+    var lineColor = castOption(line.color, pt.pts) || Color.defaultLine;
+    var lineWidth = castOption(line.width, pt.pts) || 0;
 
     s.style({'stroke-width': lineWidth})
-    .call(Color.fill, pt.color)
-    .call(Color.stroke, lineColor);
+        .call(Color.fill, pt.color)
+        .call(Color.stroke, lineColor);
 };
 
-},{"../../components/color":234}],444:[function(require,module,exports){
+},{"../../components/color":225,"./helpers":435}],437:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89409,7 +90006,7 @@ module.exports = function arraysToCalcdata(cd, trace) {
     }
 };
 
-},{"../../lib":350}],445:[function(require,module,exports){
+},{"../../lib":342}],438:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89712,7 +90309,7 @@ module.exports = {
     error_x: errorBarAttrs
 };
 
-},{"../../components/colorbar/attributes":235,"../../components/colorscale/color_attributes":241,"../../components/drawing":258,"../../components/drawing/attributes":257,"../../components/errorbars/attributes":260,"../../lib/extend":343,"../../plots/font_attributes":414,"./constants":450}],446:[function(require,module,exports){
+},{"../../components/colorbar/attributes":226,"../../components/colorscale/color_attributes":233,"../../components/drawing":250,"../../components/drawing/attributes":249,"../../components/errorbars/attributes":252,"../../lib/extend":335,"../../plots/font_attributes":406,"./constants":443}],439:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89843,7 +90440,7 @@ module.exports = function calc(gd, trace) {
     return cd;
 };
 
-},{"../../constants/numerical":333,"../../plots/cartesian/axes":390,"./arrays_to_calcdata":444,"./colorscale_calc":449,"./subtypes":466,"fast-isnumeric":12}],447:[function(require,module,exports){
+},{"../../constants/numerical":325,"../../plots/cartesian/axes":382,"./arrays_to_calcdata":437,"./colorscale_calc":442,"./subtypes":459,"fast-isnumeric":12}],440:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89882,7 +90479,7 @@ module.exports = function cleanData(fullData) {
     }
 };
 
-},{}],448:[function(require,module,exports){
+},{}],441:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89938,7 +90535,7 @@ module.exports = function colorbar(gd, cd) {
         .options(marker.colorbar)();
 };
 
-},{"../../components/colorbar/draw":237,"../../components/colorscale":248,"../../lib":350,"../../plots/plots":426,"fast-isnumeric":12}],449:[function(require,module,exports){
+},{"../../components/colorbar/draw":229,"../../components/colorscale":240,"../../lib":342,"../../plots/plots":418,"fast-isnumeric":12}],442:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89971,7 +90568,7 @@ module.exports = function calcMarkerColorscale(trace) {
     }
 };
 
-},{"../../components/colorscale/calc":240,"../../components/colorscale/has_colorscale":247,"./subtypes":466}],450:[function(require,module,exports){
+},{"../../components/colorscale/calc":232,"../../components/colorscale/has_colorscale":239,"./subtypes":459}],443:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -89998,7 +90595,7 @@ module.exports = {
     maxScreensAway: 20
 };
 
-},{}],451:[function(require,module,exports){
+},{}],444:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90080,7 +90677,7 @@ module.exports = function supplyDefaults(traceIn, traceOut, defaultColor, layout
     coerce('cliponaxis');
 };
 
-},{"../../components/errorbars/defaults":263,"../../lib":350,"./attributes":445,"./constants":450,"./fillcolor_defaults":453,"./line_defaults":457,"./line_shape_defaults":459,"./marker_defaults":462,"./subtypes":466,"./text_defaults":467,"./xy_defaults":468}],452:[function(require,module,exports){
+},{"../../components/errorbars/defaults":255,"../../lib":342,"./attributes":438,"./constants":443,"./fillcolor_defaults":446,"./line_defaults":450,"./line_shape_defaults":452,"./marker_defaults":455,"./subtypes":459,"./text_defaults":460,"./xy_defaults":461}],445:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90123,7 +90720,7 @@ function isValid(v) {
     return v || v === 0;
 }
 
-},{"../../lib":350}],453:[function(require,module,exports){
+},{"../../lib":342}],446:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90161,7 +90758,7 @@ module.exports = function fillColorDefaults(traceIn, traceOut, defaultColor, coe
     ));
 };
 
-},{"../../components/color":234}],454:[function(require,module,exports){
+},{"../../components/color":225}],447:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90214,7 +90811,7 @@ module.exports = function getTraceColor(trace, di) {
     }
 };
 
-},{"../../components/color":234,"./subtypes":466}],455:[function(require,module,exports){
+},{"../../components/color":225,"./subtypes":459}],448:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90382,7 +90979,7 @@ module.exports = function hoverPoints(pointData, xval, yval, hovermode) {
     }
 };
 
-},{"../../components/color":234,"../../components/errorbars":264,"../../components/fx":275,"../../lib":350,"./fill_hover_text":452,"./get_trace_color":454}],456:[function(require,module,exports){
+},{"../../components/color":225,"../../components/errorbars":256,"../../components/fx":267,"../../lib":342,"./fill_hover_text":445,"./get_trace_color":447}],449:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90426,7 +91023,7 @@ Scatter.meta = {
 
 module.exports = Scatter;
 
-},{"../../plots/cartesian":400,"./arrays_to_calcdata":444,"./attributes":445,"./calc":446,"./clean_data":447,"./colorbar":448,"./defaults":451,"./hover":455,"./plot":463,"./select":464,"./style":465,"./subtypes":466}],457:[function(require,module,exports){
+},{"../../plots/cartesian":392,"./arrays_to_calcdata":437,"./attributes":438,"./calc":439,"./clean_data":440,"./colorbar":441,"./defaults":444,"./hover":448,"./plot":456,"./select":457,"./style":458,"./subtypes":459}],450:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90459,7 +91056,7 @@ module.exports = function lineDefaults(traceIn, traceOut, defaultColor, layout, 
     if(!(opts || {}).noDash) coerce('line.dash');
 };
 
-},{"../../components/colorscale/defaults":243,"../../components/colorscale/has_colorscale":247}],458:[function(require,module,exports){
+},{"../../components/colorscale/defaults":235,"../../components/colorscale/has_colorscale":239}],451:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90870,7 +91467,7 @@ module.exports = function linePoints(d, opts) {
     return segments;
 };
 
-},{"../../constants/numerical":333,"../../lib":350,"./constants":450}],459:[function(require,module,exports){
+},{"../../constants/numerical":325,"../../lib":342,"./constants":443}],452:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90889,7 +91486,7 @@ module.exports = function handleLineShapeDefaults(traceIn, traceOut, coerce) {
     if(shape === 'spline') coerce('line.smoothing');
 };
 
-},{}],460:[function(require,module,exports){
+},{}],453:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90930,7 +91527,7 @@ module.exports = function linkTraces(gd, plotinfo, cdscatter) {
     }
 };
 
-},{}],461:[function(require,module,exports){
+},{}],454:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -90972,7 +91569,7 @@ module.exports = function makeBubbleSizeFn(trace) {
     };
 };
 
-},{"fast-isnumeric":12}],462:[function(require,module,exports){
+},{"fast-isnumeric":12}],455:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91047,7 +91644,7 @@ module.exports = function markerDefaults(traceIn, traceOut, defaultColor, layout
     }
 };
 
-},{"../../components/color":234,"../../components/colorscale/defaults":243,"../../components/colorscale/has_colorscale":247,"./subtypes":466}],463:[function(require,module,exports){
+},{"../../components/color":225,"../../components/colorscale/defaults":235,"../../components/colorscale/has_colorscale":239,"./subtypes":459}],456:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91620,7 +92217,7 @@ function selectMarkers(gd, idx, plotinfo, cdscatter, cdscatterAll) {
     });
 }
 
-},{"../../components/drawing":258,"../../components/errorbars":264,"../../lib":350,"../../lib/polygon":361,"./line_points":458,"./link_traces":460,"./subtypes":466,"d3":8}],464:[function(require,module,exports){
+},{"../../components/drawing":250,"../../components/errorbars":256,"../../lib":342,"../../lib/polygon":353,"./line_points":451,"./link_traces":453,"./subtypes":459,"d3":8}],457:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91665,8 +92262,8 @@ module.exports = function selectPoints(searchInfo, polygon) {
             if(polygon.contains([x, y])) {
                 selection.push({
                     pointNumber: i,
-                    x: di.x,
-                    y: di.y
+                    x: xa.c2d(di.x),
+                    y: ya.c2d(di.y)
                 });
                 di.dim = 0;
             }
@@ -91689,7 +92286,7 @@ module.exports = function selectPoints(searchInfo, polygon) {
     return selection;
 };
 
-},{"../../constants/interactions":332,"./subtypes":466}],465:[function(require,module,exports){
+},{"../../constants/interactions":324,"./subtypes":459}],458:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91735,7 +92332,7 @@ module.exports = function style(gd) {
     s.call(ErrorBars.style);
 };
 
-},{"../../components/drawing":258,"../../components/errorbars":264,"d3":8}],466:[function(require,module,exports){
+},{"../../components/drawing":250,"../../components/errorbars":256,"d3":8}],459:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91771,7 +92368,7 @@ module.exports = {
     }
 };
 
-},{"../../lib":350}],467:[function(require,module,exports){
+},{"../../lib":342}],460:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91792,7 +92389,7 @@ module.exports = function(traceIn, traceOut, layout, coerce) {
     Lib.coerceFont(coerce, 'textfont', layout.font);
 };
 
-},{"../../lib":350}],468:[function(require,module,exports){
+},{"../../lib":342}],461:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91842,7 +92439,7 @@ module.exports = function handleXYDefaults(traceIn, traceOut, layout, coerce) {
     return len;
 };
 
-},{"../../registry":434}],469:[function(require,module,exports){
+},{"../../registry":426}],462:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91939,7 +92536,7 @@ module.exports = overrideAll({
     })
 }, 'calc', 'nested');
 
-},{"../../components/colorscale/color_attributes":241,"../../components/drawing/attributes":257,"../../lib/extend":343,"../../plot_api/edit_types":374,"../../plots/attributes":388,"../scatter/attributes":445}],470:[function(require,module,exports){
+},{"../../components/colorscale/color_attributes":233,"../../components/drawing/attributes":249,"../../lib/extend":335,"../../plot_api/edit_types":366,"../../plots/attributes":380,"../scatter/attributes":438}],463:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -91983,7 +92580,7 @@ module.exports = function calc(gd, trace) {
     return calcTrace;
 };
 
-},{"../../constants/numerical":333,"../scatter/arrays_to_calcdata":444,"../scatter/colorscale_calc":449,"fast-isnumeric":12}],471:[function(require,module,exports){
+},{"../../constants/numerical":325,"../scatter/arrays_to_calcdata":437,"../scatter/colorscale_calc":442,"fast-isnumeric":12}],464:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92073,7 +92670,7 @@ module.exports = overrideAll({
     })
 }, 'calc', 'nested');
 
-},{"../../components/colorbar/attributes":235,"../../lib/extend":343,"../../plot_api/edit_types":374,"../../plots/attributes":388,"../../plots/mapbox/layout_attributes":422,"../scatter/attributes":445,"../scattergeo/attributes":469}],472:[function(require,module,exports){
+},{"../../components/colorbar/attributes":226,"../../lib/extend":335,"../../plot_api/edit_types":366,"../../plots/attributes":380,"../../plots/mapbox/layout_attributes":414,"../scatter/attributes":438,"../scattergeo/attributes":462}],465:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92461,7 +93058,7 @@ function isBADNUM(lonlat) {
     return lonlat[0] === BADNUM;
 }
 
-},{"../../components/colorscale":248,"../../constants/interactions":332,"../../constants/numerical":333,"../../lib":350,"../../lib/geojson_utils":346,"../../plots/mapbox/convert_text_opts":419,"../scatter/make_bubble_size_func":461,"../scatter/subtypes":466,"fast-isnumeric":12}],473:[function(require,module,exports){
+},{"../../components/colorscale":240,"../../constants/interactions":324,"../../constants/numerical":325,"../../lib":342,"../../lib/geojson_utils":338,"../../plots/mapbox/convert_text_opts":411,"../scatter/make_bubble_size_func":454,"../scatter/subtypes":459,"fast-isnumeric":12}],466:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92540,7 +93137,7 @@ function handleLonLatDefaults(traceIn, traceOut, coerce) {
     return len;
 }
 
-},{"../../lib":350,"../scatter/fillcolor_defaults":453,"../scatter/line_defaults":457,"../scatter/marker_defaults":462,"../scatter/subtypes":466,"../scatter/text_defaults":467,"./attributes":471}],474:[function(require,module,exports){
+},{"../../lib":342,"../scatter/fillcolor_defaults":446,"../scatter/line_defaults":450,"../scatter/marker_defaults":455,"../scatter/subtypes":459,"../scatter/text_defaults":460,"./attributes":464}],467:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92560,7 +93157,7 @@ module.exports = function eventData(out, pt) {
     return out;
 };
 
-},{}],475:[function(require,module,exports){
+},{}],468:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92660,7 +93257,7 @@ function getExtraText(trace, di) {
     return text.join('<br>');
 }
 
-},{"../../components/fx":275,"../../constants/numerical":333,"../scatter/fill_hover_text":452,"../scatter/get_trace_color":454}],476:[function(require,module,exports){
+},{"../../components/fx":267,"../../constants/numerical":325,"../scatter/fill_hover_text":445,"../scatter/get_trace_color":447}],469:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92694,7 +93291,7 @@ ScatterMapbox.meta = {
 
 module.exports = ScatterMapbox;
 
-},{"../../plots/mapbox":420,"../scatter/colorbar":448,"../scattergeo/calc":470,"./attributes":471,"./defaults":473,"./event_data":474,"./hover":475,"./plot":477,"./select":478}],477:[function(require,module,exports){
+},{"../../plots/mapbox":412,"../scatter/colorbar":441,"../scattergeo/calc":463,"./attributes":464,"./defaults":466,"./event_data":467,"./hover":468,"./plot":470,"./select":471}],470:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92821,7 +93418,7 @@ module.exports = function createScatterMapbox(mapbox, calcTrace) {
     return scatterMapbox;
 };
 
-},{"./convert":472}],478:[function(require,module,exports){
+},{"./convert":465}],471:[function(require,module,exports){
 /**
 * Copyright 2012-2017, Plotly, Inc.
 * All rights reserved.
@@ -92880,5 +93477,5 @@ module.exports = function selectPoints(searchInfo, polygon) {
     return selection;
 };
 
-},{"../scatter/subtypes":466}]},{},[4])(4)
+},{"../scatter/subtypes":459}]},{},[4])(4)
 });
