@@ -1,6 +1,8 @@
 ## Plotly.js with french translations
 > This is a [fork of the Plotly.js library](https://github.com/plotly/plotly.js) that includes internationalisation of d3 dates and some UI texts.
 
+[![npm version](https://badge.fury.io/js/plotly.js-with-locales.svg)](https://badge.fury.io/js/plotly.js-with-locales)
+
 This first version handles only french translations.
 
 ### Usage
