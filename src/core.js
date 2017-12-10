@@ -10,7 +10,7 @@
 
 /*
 * Hack around the lack of localization support in Plotly by redirecting
-* formatting requests as necessary to a newly constructed French locale
+* formatting requests as necessary to a newly constructed locale
 */
 var UI_TEXTS = {
     EN: {
@@ -72,6 +72,36 @@ var UI_TEXTS = {
         resetViewsButton: 'Réinitialiser les vues',
         resetViewButton: 'Réinitialiser la vue',
         spikeLinesButton: 'Affichage des repères au survol'
+    },
+    PT_BR: {
+        zoomOutTip: 'Duplo-clique para<br>desfazer o zoom',
+        isolateTip: 'Duplo-clique na legenda para isolar o traço individual',
+        pngSnapshotTip: 'Exportando imagem em formato PNG...',
+        svgSnapshotTip: 'IE somente suporta SVG.  Mudando formato para SVG.',
+        snapshotSuccessTip: 'Imagem exportada com sucesso - ',
+        snapshotErrorTip: 'Houve um problema baixando a imagem!',
+        axisScalingIssueTip: 'Houve um erro ao fazer redimensionamento do eixo',
+        noZZoomTip: 'Impossível aplicar fast-zsmooth: ',
+        zoomButton: 'Zoom',
+        panButton: 'Panorama',
+        boxSelectButton: 'Seleção retangular',
+        lassoSelectButton: 'Seleção Lasso',
+        zoomInButton: 'Mais zoom',
+        zoomOutButton: 'Menos Zoom',
+        toImageButton: 'Baixar gráfico como imagem PNG',
+        sendDataToCloudButton: 'Salvar e editar gráfico na nuvem',
+        autoscaleButton: 'Escala automática',
+        resetAxesButton: 'Reiniciar eixos',
+        closestDataOnHoverButton: 'Mostrar dado mais próximo ao passar o mouse',
+        compareDataOnHoverButton: 'Comparar dado ao passar o mouse',
+        orbitalRotationButton: 'Rotação orbital',
+        turntableRotationButton: 'Rotação giratória',
+        resetCameraButton: 'Reiniciar câmera para configuração padrão',
+        resetSavedCameraButton: 'Reiniciar câmera para última configuração salva',
+        resetGeoButton: 'Reiniciar',
+        resetViewsButton: 'Reiniciar visualizações',
+        resetViewButton: 'Reiniciar visualização',
+        spikeLinesButton: 'Ligar/desligar linhas spike'
     }
 };
 var D3_LOCALES = {
@@ -88,6 +118,20 @@ var D3_LOCALES = {
       shortDays: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
       months: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
       shortMonths: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jui', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+    }),
+    PT_BR: d3.locale({
+      decimal: ',',
+      thousands: '.',
+      grouping: [3],
+      currency: ['R$', ''],
+      dateTime: '%a %b %e %X %Y',
+      date: '%d/%m/%Y',
+      time: '%H:%M:%S',
+      periods: ['AM', 'PM'],
+      days: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
+      shortDays: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
+      months: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
+      shortMonths: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     })
 };
 var d3 = require('d3');
@@ -97,17 +141,20 @@ var uiTexts = UI_TEXTS.EN;
 
 /**
  * Sets the localization to use.
- * @param {'en'|'fr'} [locale='en']
+ * @param {'en'|'fr'|'pt-br'} [locale='en']
  */
 function setLocale(locale) {
     // Set the d3 locale
     var _numberFormat = d3.format;
     var _timeFormat = d3.time.format;
     var _timeUtcFormat = d3.time.format.utc;
-    if(locale && D3_LOCALES[locale.toUpperCase()]) {
-        _numberFormat = D3_LOCALES[locale.toUpperCase()].numberFormat;
-        _timeFormat = D3_LOCALES[locale.toUpperCase()].timeFormat;
-        _timeUtcFormat = D3_LOCALES[locale.toUpperCase()].timeFormat.utc;
+    if(locale) {
+      locale = locale.toUpperCase().replace('-', '_');
+      if (D3_LOCALES[locale]) {
+        _numberFormat = D3_LOCALES[locale].numberFormat;
+        _timeFormat = D3_LOCALES[locale].timeFormat;
+        _timeUtcFormat = D3_LOCALES[locale].timeFormat.utc;
+      }
     }
     d3.format = function() {
         return _numberFormat.apply(this, arguments);
@@ -195,4 +242,3 @@ exports.Fx = require('./components/fx');
 exports.Snapshot = require('./snapshot');
 exports.PlotSchema = require('./plot_api/plot_schema');
 exports.Queue = require('./lib/queue');
-
